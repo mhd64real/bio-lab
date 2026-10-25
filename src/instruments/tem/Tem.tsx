@@ -3,7 +3,7 @@ import { ShaderView } from '../ShaderView'
 import type { CtlProps, Instrument } from '../engine'
 import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
 import { TEM_POST, TEM_SPECIMEN } from './shaders'
-import { defocusBlur, describeTem, imageBrightness, initialTem, MAGS, scaleBar, temFov, temReducer, temTick, type TemAction, type TemState } from './model'
+import { defocusBlur, describeTem, imageBrightness, initialTem, MAGS, magOf, scaleBar, temFov, temReducer, temTick, type TemAction, type TemState } from './model'
 
 function TemView({ state: s }: { state: TemState }) {
   const sb = scaleBar(s)
@@ -24,7 +24,7 @@ function TemView({ state: s }: { state: TemState }) {
           uDefocusSign: s.defocus < 0 ? 1 : -1,
           uSpecimen: s.holder === 'in',
           uFalse: s.falseColour,
-          uSpec: s.specimen === 'leaf' ? 3 : s.specimen === 'nucleus' ? 2 : s.specimen === 'cilia' ? 1 : 0,
+          uSpec: s.specimen === 'liver' ? 4 : s.specimen === 'leaf' ? 3 : s.specimen === 'nucleus' ? 2 : s.specimen === 'cilia' ? 1 : 0,
         }}
       />
       {live && s.holder === 'in' && (
@@ -71,7 +71,7 @@ function TemControls({ state: s, act, can, hl }: CtlProps<TemState, TemAction>) 
       <Group title="Magnification and focus" attention={hl('mag', 'focus')} locked={!can('mag') && !can('focus')}>
         <div className="flex items-center gap-2">
           <button type="button" aria-label="Lower magnification" disabled={!can('mag') || s.mag === 0} className="ctl-btn justify-center px-3" onClick={() => act({ type: 'mag', to: s.mag - 1 })}><Minus size={18} /></button>
-          <span className="flex-1 text-center font-display text-xl font-bold tabular-nums">{MAGS[s.mag].toLocaleString('en-US')}x</span>
+          <span className="flex-1 text-center font-display text-xl font-bold tabular-nums">{magOf(s).toLocaleString('en-US')}x</span>
           <button type="button" aria-label="Higher magnification" disabled={!can('mag') || s.mag === MAGS.length - 1} className="ctl-btn justify-center px-3" onClick={() => act({ type: 'mag', to: s.mag + 1 })}><Plus size={18} /></button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -107,7 +107,7 @@ export const TEM: Instrument<TemState, TemAction> = {
   tick: temTick,
   keyOf: (a) => a.type,
   describe: describeTem,
-  readout: (s) => [`${MAGS[s.mag].toLocaleString('en-US')}x`, s.holder === 'in' ? 'vacuum' : s.holder === 'airlock' ? 'airlock' : 'no holder'],
+  readout: (s) => [`${magOf(s).toLocaleString('en-US')}x`, s.holder === 'in' ? 'vacuum' : s.holder === 'airlock' ? 'airlock' : 'no holder'],
   flags: (p, n) => {
     const f: string[] = []
     if (n.falseColour && !p.falseColour) f.push('falseOn')

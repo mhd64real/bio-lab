@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronUp, Droplet, Play, Power, Square, Timer } from 'lucide-react'
+import { ChevronDown, ChevronUp, Droplet, Play, Power, Square, Thermometer, Timer } from 'lucide-react'
 import { ShaderView } from '../ShaderView'
 import type { CtlProps, Instrument } from '../engine'
 import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
 import { CONFOCAL_POST, CONFOCAL_SPECIMEN } from './shaders'
 import {
-  bleach, confocalReducer, confocalTick, describeConfocal, fov, gainFactor, initialConfocal, LASER_INFO, LASERS, photons, section,
+  bleach, confocalReducer, confocalTick, describeConfocal, fov, gainFactor, initialConfocal, LASER_INFO, LASERS, photons, section, timelapseSpeed,
   type ConfocalAction, type ConfocalState,
 } from './model'
 
@@ -12,6 +12,7 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
   const on = s.power && s.dish && s.scanning
   const dry = s.objective === 63 && !s.oil
   return (
+    <div className="relative h-full">
     <ShaderView
       label="Confocal image on the monitor"
       specimen={CONFOCAL_SPECIMEN}
@@ -19,7 +20,8 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
       animate={on}
       scale={0.75}
       uniforms={{
-        uSpeed: s.timelapse ? 20 : 1,
+        uSpeed: s.timelapse ? timelapseSpeed(s) : 1,
+        uMin: s.temp === 32 ? Math.max(0.001, s.cargoMin) : 0,
         uFov: fov(s),
         uZ: s.z,
         uTh: section(s),
@@ -31,9 +33,15 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
         uHaze: Math.max(0, (s.pinhole - 1) / 4) * (s.objective === 63 ? 1 : 0.3),
         uSoft: (dry ? 9 : 1) + (s.pinhole - 0.5) * 0.6,
         uRange: s.range,
-        uSpec: s.specimen === 'mito' ? 2 : s.specimen === 'nuclei' ? 1 : 0,
+        uSpec: s.specimen === 'traffic' ? 3 : s.specimen === 'mito' ? 2 : s.specimen === 'nuclei' ? 1 : 0,
       }}
     />
+    {s.specimen === 'traffic' && s.dish && (
+      <span className="pointer-events-none absolute left-3 top-3 rounded bg-black/55 px-2 py-0.5 text-sm font-extrabold text-white tabular-nums">
+        {s.temp === 40 ? '40 °C: protein held in the ER' : `32 °C: ${Math.floor(s.cargoMin)} min after release`}
+      </span>
+    )}
+    </div>
   )
 }
 
@@ -86,9 +94,17 @@ function ConfocalControls({ state: s, act, can, hl }: CtlProps<ConfocalState, Co
           ))}
         </div>
         <button type="button" disabled={!can('timelapse')} className={`ctl-btn mt-2 w-full justify-center ${s.timelapse ? 'ctl-on' : ''}`} onClick={() => act({ type: 'timelapse' })}>
-          <Timer size={18} /> {s.timelapse ? 'Time-lapse on (20x faster)' : 'Time-lapse off'}
+          <Timer size={18} /> {s.timelapse ? (s.specimen === 'traffic' ? 'Time-lapse on (2 minutes per second)' : 'Time-lapse on (20x faster)') : 'Time-lapse off'}
         </button>
       </Group>
+
+      {s.specimen === 'traffic' && (
+        <Group title="Stage heater" attention={hl('temp')} locked={!can('temp')}>
+          <button type="button" disabled={!can('temp')} className={`ctl-btn w-full justify-center ${s.temp === 32 ? 'ctl-on' : ''}`} onClick={() => act({ type: 'temp' })}>
+            <Thermometer size={18} /> {s.temp === 40 ? '40 °C: tap to cool to 32 °C' : '32 °C: protein released'}
+          </button>
+        </Group>
+      )}
 
       <Group title="Detector" attention={hl('laserPower', 'gain', 'pinhole', 'range')} locked={!can('laserPower') && !can('gain') && !can('pinhole') && !can('range')}>
         <div className="grid gap-1">

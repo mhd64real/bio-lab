@@ -3,6 +3,9 @@
 // Units: stage in micrometres, defocus in nanometres.
 
 export const MAGS = [500, 2000, 5000, 15000, 44000, 100000] as const
+// The liver section uses the 46,000x step of Figure 26 in place of 44,000x.
+const MAGS_LIVER = [500, 2000, 5000, 15000, 46000, 100000] as const
+export const magOf = (s: Pick<TemState, 'mag' | 'specimen'>) => (s.specimen === 'liver' ? MAGS_LIVER : MAGS)[s.mag]
 export type Holder = 'out' | 'loaded' | 'airlock' | 'in'
 
 export interface TemState {
@@ -19,7 +22,7 @@ export interface TemState {
   damage: number // accumulated electron dose on the current area
   burnAt: { x: number; y: number } | null
   interlock: number // last time the airlock interlock refused, for the message
-  specimen: 'centrosome' | 'cilia' | 'nucleus' | 'leaf'
+  specimen: 'centrosome' | 'cilia' | 'nucleus' | 'leaf' | 'liver'
 }
 
 export type TemAction =
@@ -40,7 +43,7 @@ export type TemAction =
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 
 // Field of view on the camera, micrometres.
-export const temFov = (s: TemState) => 60000 / MAGS[s.mag]
+export const temFov = (s: TemState) => 60000 / magOf(s)
 
 export function initialTem(): TemState {
   return { holder: 'out', airlock: 0, ht: false, beam: false, brightness: 0.35, mag: 0, defocus: 1800, x: 34, y: 22, falseColour: false, damage: 0, burnAt: null, interlock: -1e9, specimen: 'centrosome' }
@@ -70,7 +73,7 @@ export function temReducer(s: TemState, a: TemAction): TemState {
 }
 
 // Dose rate grows with brightness and, strongly, with magnification (the same beam on a smaller area).
-const doseRate = (s: TemState) => (s.beam && s.holder === 'in' ? Math.pow(s.brightness, 3) * Math.pow(MAGS[s.mag] / 15000, 1.5) : 0)
+const doseRate = (s: TemState) => (s.beam && s.holder === 'in' ? Math.pow(s.brightness, 3) * Math.pow(magOf(s) / 15000, 1.5) : 0)
 
 export function temTick(s: TemState, dt: number): TemState {
   let n = s
@@ -83,7 +86,7 @@ export function temTick(s: TemState, dt: number): TemState {
   return n
 }
 
-export const imageBrightness = (s: TemState) => (s.beam && s.ht ? 0.25 + 1.1 * s.brightness * Math.pow(15000 / MAGS[s.mag], 0.12) : 0)
+export const imageBrightness = (s: TemState) => (s.beam && s.ht ? 0.25 + 1.1 * s.brightness * Math.pow(15000 / magOf(s), 0.12) : 0)
 // Blur from defocus, micrometres on the specimen.
 export const defocusBlur = (s: TemState) => Math.abs(s.defocus) * 1.2e-4
 export const focusOk = (s: TemState) => defocusBlur(s) < temFov(s) * 0.004
@@ -118,3 +121,6 @@ export const NUCLEUS = (() => {
 
 // In the 'leaf' section, the middle cell's first chloroplast and first mitochondrion (see leafTissue).
 export const LEAF = { chloroplast: { x: 0, y: 9.6 - 1.6 }, mito: { x: Math.cos(1.05) * (9.6 - 0.75), y: Math.sin(1.05) * (9.6 - 0.75) } }
+
+// In the 'liver' section, the middle cell's nucleus, rough ER stack, smooth ER patch and Golgi stack (see liverTissue).
+export const LIVER = { nucleus: { x: -4.5, y: -0.5 }, rer: { x: 4.6, y: -1.8 }, ser: { x: -0.8, y: -5.6 }, golgi: { x: 0.6, y: 3.3 } }

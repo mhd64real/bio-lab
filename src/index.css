@@ -430,3 +430,8 @@ button:disabled { cursor: default; }
   box-shadow: 0 0 0 6px #1c2430, 0 18px 40px rgba(16, 24, 40, 0.28);
   touch-action: none;
 }
+
+/* Phase 6 shipping bench: invisible tap areas on the cell illustration. */
+.ship-hit { fill: transparent; stroke: transparent; stroke-width: 4; cursor: pointer; transition: stroke 0.15s, fill 0.15s; }
+.ship-hit:hover { stroke: #f2a516; stroke-dasharray: 10 8; fill: rgba(242, 165, 22, 0.08); }
+.ship-miss { stroke: #e03131 !important; fill: rgba(224, 49, 49, 0.12) !important; }

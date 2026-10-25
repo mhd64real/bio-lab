@@ -6,13 +6,14 @@ export const CONFOCAL_SPECIMEN = /* glsl */ `#version 300 es
 precision highp float;
 uniform vec2 uRes;
 uniform float uTime;
-uniform float uSpeed;   // 1 live, 20 for a time-lapse
+uniform float uSpeed;   // 1 live, 20 (or 120 for the traffic cells) for a time-lapse
 uniform float uFov;
 uniform float uZ;
 uniform float uTh;      // optical section half-thickness, um
 uniform float uPsf;     // lateral resolution (blur sigma), um
 uniform vec3 uCh;       // 405, 488, 640 channels on
-uniform float uSpec;    // 0 cytoskeleton cells, 1 nuclei (Hoechst + GFP nuclear pores)
+uniform float uSpec;    // 0 cytoskeleton cells, 1 nuclei (Hoechst + GFP nuclear pores), 2 mitochondria, 3 protein traffic
+uniform float uMin;     // traffic: minutes since the release to 32 °C
 out vec4 outColor;
 ${NOISE}
 
@@ -177,6 +178,100 @@ vec3 mitoField(vec2 p, float t, float sig, float px) {
   return col;
 }
 
+// Cells making a GFP-tagged membrane protein (green) and a far-red Golgi marker (magenta), with Hoechst.
+// uMin: minutes since the release from 40 °C to 32 °C (0 = still held in the ER). The protein starts in the
+// ER network (which wraps the nucleus as the nuclear envelope), gathers in the Golgi ribbon beside the
+// nucleus, then reaches the plasma membrane; small transport carriers dart between them. Same split as
+// cargoSplit in model.ts. Only about half the cells took up the genes.
+float sq(float x) { return x * x; }
+vec3 cargo(float m) {
+  if (m <= 0.0) return vec3(1.0, 0.0, 0.0);
+  float k1 = 1.0 / 8.0, k2 = 1.0 / 18.0;
+  float er = exp(-k1 * m);
+  float go = k1 / (k2 - k1) * (exp(-k1 * m) - exp(-k2 * m));
+  return vec3(er, go, max(0.0, 1.0 - er - go));
+}
+vec3 trafficField(vec2 p, float t, float sig, float px) {
+  const float SP = 80.0;
+  vec2 g = floor(p / SP + 0.5);
+  bool home = g.x == 0.0 && g.y == 0.0;
+  vec2 h = hash22(g + 7.0), h2 = hash22(g * 3.1 + 2.0);
+  if (!home && h.x < 0.2) return vec3(0.0);
+  bool expr = home || h2.y > 0.45;
+  vec2 c = g * SP + (home ? vec2(0.0) : (h - 0.5) * 14.0);
+  float ang = home ? 0.35 : h.y * 6.2831;
+  float R = home ? 25.0 : 22.0 + 6.0 * h.x;
+  vec2 q = rot(-ang) * (p - c);
+  float th = atan(q.y, q.x);
+  float ph = h2.x * 6.2831;
+  float rad = R * (1.0 + 0.13 * sin(2.0 * th + ph) + 0.1 * sin(3.0 * th + 2.3 * ph) + 0.05 * sin(7.0 * th + ph * 3.0));
+  float d = rad - length(q);
+  float inside = smoothstep(-sig, sig, d);
+  vec2 nc = vec2(-7.0, -1.0);
+  vec2 nq = q - nc;
+  float nr = length(nq / vec2(9.5, 7.0));
+  float nucIn = 1.0 - smoothstep(1.0 - px / 7.0 - 0.04, 1.0, nr);
+  float nuc = nucIn * (0.65 + 0.45 * fbm(nq * 0.55 + g * 9.0));
+  nuc *= 1.0 - 0.55 * (1.0 - smoothstep(1.0, 2.2, length(nq - vec2(2.0, 1.0))));
+  vec3 col = vec3(0.0);
+  col += uCh.x * vec3(0.30, 0.48, 1.0) * nuc * slab(2.0, 5.0);
+  if (!expr) return col;
+
+  vec3 sp = cargo(home ? uMin : max(0.0, uMin + (h2.x - 0.5) * 6.0 * step(0.001, uMin)));
+  float lvl = home ? 1.0 : 0.6 + 0.6 * h.x; // how much protein each cell makes
+
+  // ER: a fine network of tubes, denser and sheet-like near the nucleus, continuous with the nuclear envelope.
+  vec2 wq = q + 1.6 * vec2(fbm(q * 0.12 + g), fbm(q * 0.12 + g + 7.0));
+  float tw = 0.018 + 0.022 * vnoise(wq * 0.6);
+  vec2 v1 = voronoi(wq / 1.4 + g * 5.0), v2 = voronoi(wq / 2.6 + g * 3.0 + 17.0);
+  float e1 = (v1.y - v1.x) * 0.7, e2 = (v2.y - v2.x) * 1.3;
+  float net = mix(exp(-e1 * e1 / (tw + sig * sig)), exp(-e2 * e2 / (tw + sig * sig)), smoothstep(5.0, 16.0, length(nq)));
+  net *= 0.45 + 0.55 * vnoise(wq * 0.7 + 3.0);
+  net *= step(0.22, vnoise(wq * 0.35 + 11.0)) * 0.7 + 0.3;
+  float nearN = 1.0 - smoothstep(1.0, 1.9, nr);
+  float sheet = nearN * (0.35 + 0.35 * fbm(q * 0.7 + g));
+  float env = exp(-sq((nr - 1.0) * 8.0));
+  float er = (max(net, sheet) * (1.0 - nucIn) + 1.2 * env) * smoothstep(0.0, 6.0, d) * inside;
+
+  // Golgi ribbon: compact bright stacks hugging the nucleus on the side towards the cell centre.
+  vec2 gq = nq / vec2(9.5, 7.0);
+  float ga = atan(gq.y, gq.x);
+  float gband = exp(-sq((nr - 1.28 - 0.05 * sin(ga * 5.0)) / 0.2)) * exp(-sq(ga / 0.85));
+  float stacks = smoothstep(0.3, 0.6, vnoise(q * 1.1 + g * 3.0));
+  float golgi = gband * (0.3 + 0.7 * stacks);
+
+  // Plasma membrane: the outline of the cell, plus a faint film over its flat underside.
+  float pmRim = exp(-sq(d - 0.4) / (0.15 + sig * sig)) * step(-1.0, d);
+  float pmBase = 0.18 * inside * (0.8 + 0.2 * vnoise(q * 0.5));
+
+  // Transport carriers: dots darting from the ER to the Golgi and from the Golgi to the cell edge.
+  vec2 gc = nc + vec2(9.5, 7.0) * 1.3 * vec2(1.0, 0.0);
+  float car = 0.0;
+  float f1 = clamp(sp.x * 4.0, 0.0, 1.0) * step(0.001, sp.y + sp.z);
+  float f2 = clamp(sp.y * 3.0, 0.0, 1.0);
+  for (int i = 0; i < 28; i++) {
+    float fi = float(i);
+    vec2 hi = hash22(vec2(fi, 17.0) + g);
+    bool outw = i >= 14;
+    float amp = outw ? f2 : f1;
+    if (amp < 0.01) continue;
+    float a = hi.x * 6.2831;
+    float er_ = R * (1.0 + 0.13 * sin(2.0 * a + ph) + 0.1 * sin(3.0 * a + 2.3 * ph) + 0.05 * sin(7.0 * a + ph * 3.0));
+    vec2 far = nc + vec2(cos(a), sin(a)) * mix(12.0, er_ - 1.0, outw ? 1.0 : 0.3 + 0.6 * hi.y);
+    float f = fract(t / (10.0 + 8.0 * hi.y) + hi.y * 7.0);
+    vec2 pos = outw ? mix(gc, far, f) : mix(far, gc, f);
+    float l = length(q - pos);
+    car += exp(-l * l / (2.0 * (0.12 + sig * sig))) * amp * smoothstep(0.0, 0.1, f) * smoothstep(1.0, 0.85, f);
+  }
+
+  float green = lvl * (1.25 * sp.x * er * slab(0.6, 2.6) + 4.5 * sp.y * golgi * slab(1.5, 3.5)
+    + sp.z * (1.3 * pmRim * slab(0.2, 3.5) + pmBase * layer(0.3)) + 0.8 * car * slab(0.6, 3.0));
+  float marker = lvl * (0.95 * golgi + 0.05 * er) * slab(1.5, 3.5);
+  col += uCh.y * vec3(0.18, 1.0, 0.32) * 0.6 * green;
+  col += uCh.z * vec3(1.0, 0.18, 0.72) * 0.75 * marker;
+  return col;
+}
+
 void main() {
   // Frames arrive a few times a second, like a real scanning system.
   float t = floor(uTime * 4.0) / 4.0 * uSpeed;
@@ -184,6 +279,7 @@ void main() {
   vec2 p = v * uFov;
   float px = uFov / min(uRes.x, uRes.y);
   float sig = max(uPsf, px * 0.7);
+  if (uSpec > 2.5) { outColor = vec4(trafficField(p, t, sig, px), 1.0); return; }
   if (uSpec > 1.5) { outColor = vec4(mitoField(p, t, sig, px), 1.0); return; }
   if (uSpec > 0.5) { outColor = vec4(nucleiField(p, t, sig, px), 1.0); return; }
 

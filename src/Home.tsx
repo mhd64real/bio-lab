@@ -9,7 +9,7 @@ export const PHASES = [
   { id: 'p3', n: 3, title: 'Appendages and cell walls', pages: 'Pages 58 to 59', blurb: 'Beating cilia, whipping flagella and rigid walls.', ready: true },
   { id: 'p4', n: 4, title: 'The nucleus', pages: 'Page 60', blurb: 'The control centre: living nuclei, a 3D slice, and its envelope seen with electrons.', ready: true },
   { id: 'p5', n: 5, title: 'Processing energy', pages: 'Page 61', blurb: 'Chloroplasts, coloured and starchy plastids, and living mitochondria.', ready: true },
-  { id: 'p6', n: 6, title: 'Manufacturing proteins', pages: 'Pages 62 to 63', blurb: 'Ribosomes, ER, Golgi and the vesicles they ship.', ready: false },
+  { id: 'p6', n: 6, title: 'Manufacturing proteins', pages: 'Pages 62 to 63', blurb: 'Ribosomes, ER and Golgi in a liver cell, and a protein shipped live.', ready: true },
   { id: 'p7', n: 7, title: 'Storage and cleanup', pages: 'Pages 63 to 64', blurb: 'Vacuoles and lysosomes.', ready: false },
   { id: 'p8', n: 8, title: 'Organelles at work', pages: 'Pages 64 to 66', blurb: 'Follow one protein through the whole cell, then your result card.', ready: false },
 ]

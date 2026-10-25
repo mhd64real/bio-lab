@@ -9,7 +9,7 @@ uniform vec2 uRes;
 uniform float uFov;
 uniform vec2 uStage;
 uniform vec3 uBurn; // x, y, on
-uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus, 3 leaf
+uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus, 3 leaf, 4 liver
 out vec4 outColor;
 ${NOISE}
 
@@ -371,6 +371,266 @@ float leafTissue(vec2 p) {
   return dens;
 }
 
+// ---- Liver cell (hepatocyte) ----
+// Fuzzy dense granules about 25 nm across (ribosomes): a jittered grid, each spot present with probability
+// amount, soft-edged and of varying size, as they look in a real section.
+float granules(vec2 p, float cellSize, float amount, float size, float seed) {
+  vec2 i0 = floor(p / cellSize);
+  float acc = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = i0 + vec2(x, y);
+    vec2 h = hash22(c + seed);
+    if (hash12(c * 1.7 + seed) > amount) continue;
+    vec2 gp = (c + 0.15 + 0.7 * h) * cellSize;
+    float r = size * (0.75 + 0.5 * hash12(c + seed + 3.0));
+    float d = length(p - gp);
+    acc = max(acc, exp(-d * d / (r * r)) * (0.75 + 0.25 * h.x));
+  }
+  return acc;
+}
+float cytosol(vec2 p, float ribAmount) {
+  float tex = 0.2 + 0.05 * fbm(p * 3.0) + 0.05 * (fbm(p * 0.9) - 0.5) + 0.05 * (fbm(p * 14.0) - 0.5) * lod(0.04) + (0.07 * (vnoise(p * 140.0) - 0.5) + 0.05 * (vnoise(p * 380.0) - 0.5)) * lod(0.008);
+  // Free ribosomes, crowded into loose clusters (polysomes) where the noise is high.
+  float amt = ribAmount * (0.15 + 0.85 * smoothstep(0.4, 0.8, fbm(p * 6.0)));
+  float rib = granules(p, 0.03, amt, 0.0085, 1.0);
+  return mix(tex + 0.05 * ribAmount, max(tex, 0.19 + 0.36 * rib), lod(0.016));
+}
+
+// Rough ER: flattened sacs about 0.2 um apart, gently curved, each with its own bends, ending in rounded
+// tips; the outer faces carry ribosomes. lq: local frame, x along the sacs. -1 where there is no sac.
+float sacDist(vec2 lq, float k, float seed, out float vv) {
+  float hk = hash12(vec2(k, seed));
+  float yc = k * 0.2 + 0.05 * (hk - 0.5) + 0.07 * sin(lq.x * 1.1 + hk * 6.0) + 0.02 * sin(lq.x * 3.7 + k);
+  vv = lq.y - yc;
+  float best = 1e9;
+  for (int j = 0; j < 2; j++) {
+    float fj = float(j);
+    float L = 0.55 + 0.85 * hash12(vec2(k, seed + 2.0 + fj)) - 0.06 * abs(k);
+    float x0 = (fj - 0.5) * 1.9 + 0.6 * (hash12(vec2(k, seed + 4.0 + fj)) - 0.5);
+    if (L <= 0.1) continue;
+    float dx = max(abs(lq.x - x0) - L, 0.0);
+    float hw = 0.011 + 0.013 * vnoise(vec2(lq.x * 3.0, k * 5.0 + fj)) + 0.006 * smoothstep(L - 0.12, L, abs(lq.x - x0));
+    best = min(best, length(vec2(dx, vv)) - hw);
+  }
+  return best;
+}
+float rerStack(vec2 lq, float seed) {
+  float k0 = floor(lq.y / 0.2 + 0.5);
+  float d = 1e9, vv = 0.0, kk = k0;
+  for (int t = -1; t <= 1; t++) {
+    float k = k0 + float(t);
+    if (abs(k) > 4.0) continue;
+    float v;
+    float dk = sacDist(lq, k, seed, v);
+    if (dk < d) { d = dk; vv = v; kk = k; }
+  }
+  if (d > 0.055) return -1.0;
+  float memb = softLine(d, 0.0065) * (0.8 + 0.2 * vnoise(lq * 300.0));
+  float lumen = 0.17 + 0.07 * (vnoise(lq * 110.0 + seed) - 0.5) * lod(0.01);
+  // Ribosomes in an irregular row just outside the membrane.
+  float side = vv > 0.0 ? 1.0 : -1.0;
+  float rs = lq.x / 0.027;
+  float ribo = 0.0;
+  for (int t = -1; t <= 1; t++) {
+    float c = floor(rs) + float(t);
+    vec2 h = hash22(vec2(c, kk * 3.0 + side + seed));
+    if (h.x < 0.12) continue;
+    float cx = (c + 0.5 + 0.35 * (h.y - 0.5)) * 0.027;
+    float off = 0.015 + 0.006 * hash12(vec2(c, kk + side * 7.0));
+    float r = 0.0105 * (0.8 + 0.4 * hash12(vec2(c, kk + side + 11.0)));
+    vec2 dv = vec2(lq.x - cx, d - off);
+    ribo = max(ribo, exp(-dot(dv, dv) / (r * r)) * (0.8 + 0.2 * h.y));
+  }
+  // At low magnification the ribosomes merge into a dark fuzzy coat on the sacs.
+  float cd = (d - 0.016) / 0.02;
+  float coat = exp(-cd * cd) * 0.55;
+  if (d < 0.0) return max(lumen, memb * 0.9);
+  float dens = max(memb * 0.9, mix(coat, 0.2 + 0.62 * ribo, lod(0.012)));
+  return dens > 0.215 ? dens : -1.0;
+}
+
+// Smooth ER: a meshwork of narrow tubules without ribosomes. A thin section cuts it into many small round
+// and short tubular profiles with pale insides. amount: 0..1, how crowded.
+float serProfiles(vec2 q, float amount, float seed) {
+  const float CS = 0.12;
+  vec2 i0 = floor(q / CS);
+  float best = 1e9;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = i0 + vec2(x, y);
+    if (hash12(c + seed + 40.0) > amount) continue;
+    vec2 h = hash22(c + seed + 41.0);
+    vec2 pc = (c + 0.2 + 0.6 * h) * CS;
+    float a = hash12(c + seed + 42.0) * 6.2831;
+    vec2 dir = vec2(cos(a), sin(a));
+    float L = h.x < 0.5 ? 0.0 : 0.02 + 0.05 * h.y;
+    vec2 lq = q - pc;
+    float u = clamp(dot(lq, dir), -L, L);
+    vec2 bend = vec2(-dir.y, dir.x) * 0.25 * u * u / max(L, 0.01);
+    float w = 0.015 + 0.008 * hash12(c + seed + 43.0);
+    best = min(best, length(lq - dir * u - bend) - w);
+  }
+  if (best > 0.04) return -1.0;
+  float memb = softLine(best, 0.0065) * (0.75 + 0.25 * vnoise(q * 250.0));
+  if (best < 0.0) return max(0.15 + 0.05 * vnoise(q * 150.0), memb * 0.62);
+  return memb > 0.1 ? max(memb * 0.62, 0.2) : -1.0;
+}
+// Glycogen: very dark rosettes, clusters of 20 to 30 nm particles; liver cells store sugar this way.
+float glycogen(vec2 q, float amount, float seed) {
+  const float CS = 0.1;
+  vec2 i0 = floor(q / CS);
+  float m = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = i0 + vec2(x, y);
+    if (hash12(c + seed + 60.0) > amount) continue;
+    vec2 pc = (c + 0.25 + 0.5 * hash22(c + seed + 61.0)) * CS;
+    float rc = 0.025 + 0.025 * hash12(c + seed + 62.0);
+    m = max(m, smoothstep(rc + 0.012, rc - 0.01, length(q - pc)));
+  }
+  if (m <= 0.0) return 0.0;
+  float part = granules(q, 0.02, 0.9, 0.0095, seed + 70.0);
+  return m * mix(0.36, 0.25 + 0.62 * part, lod(0.012));
+}
+
+// The Golgi apparatus: a curved stack of thin flattened sacs (cisternae) with swollen rims, clouds of small
+// vesicles around the rims and larger vesicles full of dense particles leaving the outer (trans) face.
+// lq: local frame, y pointing away from the nucleus. Returns density, or -1 in the cytosol.
+float golgiStack(vec2 lq, float seed, out float zone) {
+  vec2 d = lq - vec2(0.0, -1.1);
+  float r = length(d);
+  float a = atan(d.x, d.y);
+  zone = smoothstep(0.55, 0.25, length((lq - vec2(0.0, 0.05)) / vec2(1.4, 1.0)) - 0.25);
+  if (r < 0.8 || r > 1.75 || abs(a) > 0.95) return -1.0;
+  float dens = -1.0;
+  const float SP = 0.048;
+  float k0 = floor((r - 1.0) / SP + 0.5);
+  for (int t = -1; t <= 1; t++) {
+    float k = k0 + float(t);
+    if (k < 0.0 || k > 5.0) continue;
+    float rk = 1.0 + k * SP + 0.012 * sin(a * 7.0 + k * 2.0 + seed) + 0.008 * sin(a * 17.0 + k * 5.0);
+    float s = a * rk;
+    float S = rk * (0.34 - 0.03 * abs(k - 2.5) + 0.12 * (hash12(vec2(k, seed + sign(s))) - 0.5));
+    float rim = smoothstep(S - 0.12, S - 0.01, abs(s));
+    float hw = 0.0065 + 0.016 * rim * (0.6 + 0.6 * hash12(vec2(k, seed + sign(s)))) + 0.002 * vnoise(vec2(s * 25.0, k));
+    float dx = max(abs(s) - S, 0.0);
+    float dd = length(vec2(dx, r - rk)) - hw;
+    // Holes (fenestrae) in the rims.
+    if (rim > 0.3 && hash12(vec2(floor(s / 0.06), k + seed)) > 0.78) continue;
+    if (dd < 0.022) {
+      float memb = softLine(dd, 0.0055) * (0.75 + 0.25 * vnoise(lq * 260.0 + k));
+      // Content stains darker on the inner (cis) side, paler towards the trans side.
+      float lumen = mix(0.58, 0.36, k / 5.0) * mix(1.0, 0.7, rim) + 0.08 * (vnoise(lq * 140.0 + k) - 0.5);
+      float v = dd < 0.0 ? max(lumen, memb * 0.72) : memb * 0.72;
+      if (v > 0.2) dens = max(dens, v);
+    }
+  }
+  // Unresolved at low magnification: a dark crescent.
+  float S0 = 0.36 * r;
+  float band = step(1.0 - 0.01, r) * step(r, 1.0 + 5.0 * SP + 0.01) * step(abs(a * r), S0 + 0.03) * 0.42;
+  if (band > 0.0 && lod(0.025) < 0.99) dens = max(dens, mix(band, dens, lod(0.025)));
+  for (int i = 0; i < 30; i++) {
+    float fi = float(i);
+    vec2 h = hash22(vec2(fi, seed + 3.0));
+    bool big = i >= 23;
+    float va, vr, rad;
+    if (i == 0) { va = 0.36 + 0.02; vr = 1.0 + 5.0 * SP; rad = 0.028; } // budding off the outermost rim
+    else if (big) { va = -0.42 + 0.14 * (fi - 23.0) + 0.04 * (h.x - 0.5); vr = 1.38 + 0.16 * h.y; rad = 0.045 + 0.03 * hash12(vec2(fi, seed)); }
+    else { float sd = h.x < 0.5 ? -1.0 : 1.0; va = sd * (0.36 + 0.2 * h.y); vr = 0.94 + 0.36 * hash12(vec2(fi, seed + 1.0)); rad = 0.02 + 0.012 * hash12(vec2(fi, seed + 2.0)); }
+    vec2 vc = vec2(sin(va), cos(va)) * vr;
+    vec2 dv = d - vc;
+    float l = length(dv * vec2(1.0, 1.0 + 0.25 * (hash12(vec2(fi, seed + 5.0)) - 0.5)));
+    if (l > rad + 0.025) continue;
+    float memb = softLine(l - rad, 0.0052) * (0.7 + 0.3 * vnoise(dv * 400.0));
+    float inside;
+    if (big) inside = 0.2 + 0.6 * granules(dv, 0.036, 0.55, 0.014, fi + seed) * lod(0.012) + 0.12 * (1.0 - lod(0.012));
+    else inside = 0.34 + 0.08 * vnoise(dv * 300.0);
+    // Small vesicles carry a fuzzy protein coat.
+    float cd = (l - rad - 0.008) / 0.006;
+    float coat = big ? 0.0 : 0.22 * exp(-cd * cd) * (0.5 + 0.5 * vnoise(dv * 600.0));
+    float vd = l < rad ? max(inside, memb * 0.65) : max(memb * 0.65, coat);
+    vd = mix(0.42 * smoothstep(rad + 0.012, rad, l), vd, lod(0.018));
+    if (vd > 0.2) dens = max(dens, vd);
+  }
+  return dens;
+}
+
+float liverTissue(vec2 p) {
+  // Liver cells (hepatocytes) on a 23 um grid; the cell at the origin is centred exactly and not rotated.
+  vec2 g0 = floor(p / 23.0 + 0.5);
+  float d1 = 1e9, d2 = 1e9; vec2 id = g0, cc = vec2(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 gg = g0 + vec2(x, y);
+    vec2 c = gg * 23.0 + ((gg.x == 0.0 && gg.y == 0.0) ? vec2(0.0) : (hash22(gg) - 0.5) * 7.0);
+    float d = length(p - c);
+    if (d < d1) { d2 = d1; d1 = d; id = gg; cc = c; } else if (d < d2) d2 = d;
+  }
+  float border = (d2 - d1) * 0.5;
+  bool home = id.x == 0.0 && id.y == 0.0;
+  float seed = home ? 2.0 : hash12(id) * 40.0;
+  // Some spaces are sinusoids, blood channels between the cells, with the odd red blood cell.
+  if (!home && hash12(id + 7.0) < 0.14) {
+    vec2 rq = p - cc - (hash22(id + 2.0) - 0.5) * 6.0;
+    float rbc = disc(length(rq), 3.6) * (0.62 + 0.06 * fbm(p * 4.0));
+    return max(0.05 + 0.02 * fbm(p * 2.0), max(rbc, softLine(border, 0.006) * 0.7));
+  }
+  // Two plasma membranes with a narrow gap between neighbouring cells; a faint line at low magnification.
+  float pm = max(softLine(border - 0.012, 0.0065), softLine(border + 0.012, 0.0065));
+  pm = max(pm, 0.4 * exp(-border * border / (gPx * gPx)) * (1.0 - lod(0.03)));
+  float ang = home ? 0.0 : hash12(id + 3.0) * 6.2831;
+  vec2 q = rot(ang) * (p - cc);
+  vec2 jit = home ? vec2(0.0) : (hash22(id + 5.0) - 0.5) * 2.0;
+
+  float dens = -1.0;
+  float zone = 0.0;
+  // Nucleus (some cells were cut beside it and show none).
+  vec2 N = vec2(-4.5, -0.5) + jit;
+  bool hasN = home || hash12(id + 9.0) > 0.25;
+  if (hasN && length(q - N) < 4.0) {
+    float n = nucleusSection(q - N, home ? vec2(3.3, 2.9) : vec2(3.0, 2.7), seed, home ? vec3(0.9, 0.6, 0.85) : vec3(0.5, -0.4, 0.7), false);
+    if (n >= 0.0) dens = n;
+  }
+  // Golgi stack beside the nucleus, its outer face pointing away from it.
+  vec2 G = vec2(0.6, 3.3) + jit;
+  if (dens < 0.0 && length(q - G) < 1.9) {
+    vec2 u = normalize(G - N);
+    vec2 gq = q - G;
+    float gs = golgiStack(vec2(dot(gq, vec2(u.y, -u.x)), dot(gq, u)), seed, zone);
+    if (gs >= 0.0) dens = gs;
+  }
+  // A large stack of rough ER.
+  vec2 R = vec2(4.6, -1.8) + jit;
+  if (dens < 0.0 && length((q - R) * vec2(0.75, 1.0)) < 2.6) {
+    float re = rerStack(rot(-0.5) * (q - R), seed);
+    if (re >= 0.0) dens = re;
+  }
+  // Many mitochondria (a liver cell has more than a thousand).
+  if (dens < 0.0) {
+    const float MS = 1.7;
+    vec2 m0 = floor(q / MS);
+    for (int y = -1; y <= 1 && dens < 0.0; y++) for (int x = -1; x <= 1; x++) {
+      vec2 c = m0 + vec2(x, y);
+      vec2 hm = hash22(c + seed + 6.0);
+      vec2 mc = (c + 0.2 + 0.6 * hm) * MS;
+      if (length(mc - N) < 4.0 || length(mc - G) < 2.0 || length((mc - R) * vec2(0.75, 1.0)) < 2.9 || hash12(c + seed + 8.0) < 0.3) continue;
+      vec2 lq = rot(hm.x * 6.28) * (q - mc);
+      float mt = mitoTem(lq, vec2(0.5 + 0.3 * hm.y, 0.36 + 0.06 * hm.x), seed + c.x * 3.0 + c.y);
+      if (mt >= 0.0) { dens = mt; break; }
+    }
+  }
+  // Smooth ER and glycogen fill a region of the cytoplasm away from the rough ER.
+  vec2 S = vec2(-0.8, -5.6) + jit;
+  float serW = smoothstep(3.0, 1.6, length((q - S) * vec2(0.75, 1.0)) + 0.9 * (vnoise(q * 0.7 + seed) - 0.5));
+  if (dens < 0.0 && serW > 0.0) {
+    float se = serProfiles(q, 0.75 * serW, seed);
+    if (se >= 0.0) dens = mix(0.2 + 0.08 * serW, se, lod(0.012));
+  }
+  if (dens < 0.0) {
+    dens = cytosol(p, 0.6 * (1.0 - 0.8 * zone) * (1.0 - 0.6 * serW));
+    float gl = glycogen(q, 0.04 + 0.5 * serW, seed);
+    dens = max(dens, gl);
+  }
+  return max(dens, pm * 0.82) * (1.0 + 0.12 * (fbm(p * 0.35 + 3.0) - 0.5));
+}
+
 float nucleusTissue(vec2 p) {
   float dens = 0.06 + 0.03 * fbm(p * 0.8);
   vec2 g = floor(p / 26.0 + 0.5);
@@ -407,7 +667,8 @@ void main() {
   vec2 p = uStage + v * uFov;
 
   float dens;
-  if (uSpec > 2.5) dens = leafTissue(p);
+  if (uSpec > 3.5) dens = liverTissue(p);
+  else if (uSpec > 2.5) dens = leafTissue(p);
   else if (uSpec > 1.5) dens = nucleusTissue(p);
   else if (uSpec > 0.5) dens = ciliaSection(p);
   else {
