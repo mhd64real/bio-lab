@@ -6,7 +6,7 @@ import type { PartId } from './Microscope3D'
 import { canObjective, canUse, UNLOCKED, type Lock } from './lock'
 
 // Speeds ramp up the longer a control is held, so a short tap makes a small move.
-const ramp = (held: number, full: number) => Math.min(1, held / full) ** 2
+export const ramp = (held: number, full: number) => Math.min(1, held / full) ** 2
 
 function useHold(step: (dt: number, held: number) => void) {
   const raf = useRef(0)
@@ -30,7 +30,7 @@ function useHold(step: (dt: number, held: number) => void) {
   return { start, stop }
 }
 
-function HoldButton({ step, label, children, kbd, className = '', disabled }: { step: (dt: number, held: number) => void; label: string; children: ReactNode; kbd?: string; className?: string; disabled?: boolean }) {
+export function HoldButton({ step, label, children, kbd, className = '', disabled }: { step: (dt: number, held: number) => void; label: string; children: ReactNode; kbd?: string; className?: string; disabled?: boolean }) {
   const { start, stop } = useHold(step)
   return (
     <button
@@ -52,7 +52,7 @@ function HoldButton({ step, label, children, kbd, className = '', disabled }: { 
   )
 }
 
-function Slider({ value, onChange, label, colour, attention, disabled }: { value: number; onChange: (v: number) => void; label: string; colour: string; attention?: boolean; disabled?: boolean }) {
+export function Slider({ value, onChange, label, colour, attention, disabled }: { value: number; onChange: (v: number) => void; label: string; colour: string; attention?: boolean; disabled?: boolean }) {
   return (
     <label className={`block rounded-[var(--radius-control)] ${attention ? 'attention' : ''} ${disabled ? 'ctl-locked' : ''}`}>
       <span className="flex items-baseline justify-between text-sm font-bold text-[var(--color-muted)]">
@@ -71,7 +71,7 @@ function Slider({ value, onChange, label, colour, attention, disabled }: { value
   )
 }
 
-function Group({ title, children, attention, locked }: { title: string; children: ReactNode; attention?: boolean; locked?: boolean }) {
+export function Group({ title, children, attention, locked }: { title: string; children: ReactNode; attention?: boolean; locked?: boolean }) {
   const ref = useRef<HTMLElement>(null)
   // Bring the control the guide is pointing at into view when the pad is scrolled.
   useEffect(() => { if (attention) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [attention])

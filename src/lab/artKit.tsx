@@ -1,6 +1,6 @@
 // Photo-sprite scenes: generated photos (public/art/<scene>/<name>.webp) placed and swapped in code.
 // Anything that moves continuously (liquids, films, coverslips, bubbles) is drawn in code on top.
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Bubble } from '../scope/model'
 
 export const art = (path: string) => `${import.meta.env.BASE_URL}art/${path}.webp`
@@ -73,5 +73,23 @@ export function ArtStage({ label, children, defs }: { label: string; children: R
       <image href={art('shared/bench')} x="0" y="0" width="820" height="480" preserveAspectRatio="xMidYMid slice" />
       {children}
     </svg>
+  )
+}
+
+// A generated video in a close-up lens, scrubbed by the step's progress (0..1) between two times in seconds.
+export function VideoInset({ name, p, from, to, caption, x = 560, y = 170 }: { name: string; p: number; from: number; to: number; caption?: string; x?: number; y?: number }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    const seek = () => { v.currentTime = from + p * (to - from) }
+    if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true })
+  }, [p, from, to])
+  return (
+    <Inset x={x} y={y} caption={caption}>
+      <foreignObject x="-120" y="-120" width="240" height="240">
+        <video ref={ref} src={`${import.meta.env.BASE_URL}art/video/${name}.mp4`} muted playsInline preload="auto" style={{ width: 240, height: 240, objectFit: 'cover', display: 'block' }} />
+      </foreignObject>
+    </Inset>
   )
 }
