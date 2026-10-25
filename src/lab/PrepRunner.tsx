@@ -1,45 +1,22 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { CheckCircle2, Clock, Droplet, Droplets, Flame, FlaskConical, Hand, Lightbulb, Pipette, RotateCcw, Scissors, Square, Trash2, Wand2, type LucideIcon } from 'lucide-react'
+import { createContext, useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { CheckCircle2, Clock, Lightbulb, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/kit'
 import { play } from '../lib/sound'
 import type { Bubble, Mount } from '../scope/model'
-
-export type ToolId =
-  | 'knife' | 'forceps' | 'water' | 'iodine' | 'methylene' | 'swab' | 'bin' | 'loop' | 'flame'
-  | 'crystal' | 'gramIodine' | 'alcohol' | 'safranin' | 'rinse' | 'blot' | 'coverslip'
-
-export const TOOLS: Record<ToolId, { name: string; icon: LucideIcon; colour: string }> = {
-  knife: { name: 'Knife', icon: Scissors, colour: '#5a6779' },
-  forceps: { name: 'Forceps', icon: Hand, colour: '#5a6779' },
-  water: { name: 'Water dropper', icon: Pipette, colour: '#3a9fe0' },
-  iodine: { name: 'Iodine stain', icon: Pipette, colour: '#c58a12' },
-  methylene: { name: 'Methylene blue', icon: Pipette, colour: '#2f5fc4' },
-  swab: { name: 'Cotton swab', icon: Wand2, colour: '#8a96a8' },
-  bin: { name: 'Disinfectant', icon: Trash2, colour: '#d93f45' },
-  loop: { name: 'Inoculating loop', icon: Wand2, colour: '#b07a2a' },
-  flame: { name: 'Burner flame', icon: Flame, colour: '#e8590c' },
-  crystal: { name: 'Crystal violet', icon: Pipette, colour: '#6b2fb3' },
-  gramIodine: { name: "Gram's iodine", icon: Pipette, colour: '#8a5a12' },
-  alcohol: { name: 'Alcohol (decolouriser)', icon: FlaskConical, colour: '#7c8a9e' },
-  safranin: { name: 'Safranin', icon: Pipette, colour: '#d6336c' },
-  rinse: { name: 'Water rinse', icon: Droplets, colour: '#3a9fe0' },
-  blot: { name: 'Blotting paper', icon: Square, colour: '#8a96a8' },
-  coverslip: { name: 'Coverslip', icon: Droplet, colour: '#7fb0cc' },
-}
 
 export interface PrepStep {
   id: string
   title: string
   body: string
   tip?: string
-  tool: ToolId
-  // tap: one press. timer: press, then wait `seconds` (shown on a fast clock). repeat: press `times`.
-  // hold: press and hold; the time held is the outcome. lower: lower the coverslip with the slider.
-  kind: 'tap' | 'timer' | 'repeat' | 'hold' | 'lower'
+  // What to act on, shown under the scene (e.g. "Tap the onion").
+  action: string
+  // tap: one press. timer: press, then wait `seconds` on a fast clock. repeat: press `times`.
+  // hold: press and hold; the time held is the outcome. drag: drag the slider to the end.
+  // lower: lower the coverslip with the slider (speed decides air bubbles).
+  kind: 'tap' | 'timer' | 'repeat' | 'hold' | 'drag' | 'lower'
   seconds?: number
   times?: number
-  // For hold: the right window, in seconds.
-  window?: [number, number]
 }
 
 export interface PrepOutcome {
@@ -48,13 +25,45 @@ export interface PrepOutcome {
   held: Record<string, number>
 }
 
+export interface SceneProps {
+  flags: Set<string>
+  active: string | null
+  // Progress of the current step, 0 to 1 (timer, drag, hold, repeat, lower).
+  progress: number
+  angle: number
+  bubbles: Bubble[]
+}
+
 export interface PrepDef {
   name: string
   steps: PrepStep[]
-  Slide: ComponentType<{ flags: Set<string>; bubbles: Bubble[]; active: string | null }>
+  Scene: ComponentType<SceneProps>
   mount(o: PrepOutcome): Mount
-  // What went wrong, if anything, in plain words. Null when the slide is good.
   verdict(o: PrepOutcome): ReactNode | null
+}
+
+// Scenes mark their clickable objects with <Hot id="stepId">; only the current step's object responds.
+interface HotCtx { active: string | null; act(): void; holdStart(): void; holdEnd(): void; kind: PrepStep['kind'] | null }
+const Ctx = createContext<HotCtx>({ active: null, act() {}, holdStart() {}, holdEnd() {}, kind: null })
+
+export function Hot({ id, children, ring }: { id: string | string[]; children: ReactNode; ring?: { cx: number; cy: number; r: number } }) {
+  const c = useContext(Ctx)
+  const on = c.active !== null && (Array.isArray(id) ? id.includes(c.active) : id === c.active)
+  const hold = on && c.kind === 'hold'
+  const tappable = on && (c.kind === 'tap' || c.kind === 'timer' || c.kind === 'repeat')
+  return (
+    <g
+      className={on ? 'hot-on' : undefined}
+      style={{ cursor: tappable || hold ? 'pointer' : undefined }}
+      onClick={tappable ? c.act : undefined}
+      onPointerDown={hold ? (e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); c.holdStart() } : undefined}
+      onPointerUp={hold ? c.holdEnd : undefined}
+      onPointerCancel={hold ? c.holdEnd : undefined}
+    >
+      {on && ring && <circle cx={ring.cx} cy={ring.cy} r={ring.r} className="hot-ring" />}
+      {children}
+    </g>
+  )
 }
 
 function makeBubbles(speed: number): Bubble[] {
@@ -69,57 +78,59 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
   const [flags, setFlags] = useState<Set<string>>(() => new Set())
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [held, setHeld] = useState<Record<string, number>>({})
-  const [count, setCount] = useState(0)
-  const [clock, setClock] = useState<number | null>(null) // seconds elapsed on a timed step
+  const [progress, setProgress] = useState(0)
+  const [running, setRunning] = useState(false)
   const [holding, setHolding] = useState<number | null>(null)
   const [angle, setAngle] = useState(45)
   const [finished, setFinished] = useState(false)
   const samples = useRef<{ from: number; t: number }[]>([])
   const raf = useRef(0)
+  const advancing = useRef(false)
   const step = def.steps[index]
-  const tool = TOOLS[step.tool]
-
-  const complete = () => {
-    setFlags((f) => new Set(f).add(step.id))
-    play('ok')
-    window.setTimeout(() => {
-      setCount(0); setClock(null); setHolding(null); setAngle(45); samples.current = []
-      if (index + 1 >= def.steps.length) setFinished(true)
-      else setIndex(index + 1)
-    }, 650)
-  }
 
   useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  const runTimer = () => {
-    const total = step.seconds ?? 60
-    const t0 = performance.now()
-    const tick = (now: number) => {
-      const e = Math.min(total, ((now - t0) / 1000 / FAST_CLOCK) * total)
-      setClock(e)
-      if (e < total) raf.current = requestAnimationFrame(tick)
-      else complete()
-    }
-    raf.current = requestAnimationFrame(tick)
+  const complete = () => {
+    if (advancing.current) return
+    advancing.current = true
+    setFlags((f) => new Set(f).add(step.id))
+    play('ok')
+    window.setTimeout(() => {
+      advancing.current = false
+      setProgress(0); setRunning(false); setHolding(null); setAngle(45); samples.current = []
+      if (index + 1 >= def.steps.length) setFinished(true)
+      else setIndex(index + 1)
+    }, 700)
   }
 
-  const press = () => {
-    if (flags.has(step.id) || clock !== null) return
-    if (step.kind === 'tap') { play('drop'); complete() }
-    else if (step.kind === 'timer') { play('drop'); setFlags((f) => new Set(f).add(`${step.id}:started`)); runTimer() }
-    else if (step.kind === 'repeat') {
+  const act = () => {
+    if (finished || flags.has(step.id) || running) return
+    if (step.kind === 'tap') { play('drop'); setProgress(1); complete() }
+    else if (step.kind === 'timer') {
+      play('drop')
+      setRunning(true)
+      setFlags((f) => new Set(f).add(`${step.id}:started`))
+      const t0 = performance.now()
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - t0) / 1000 / FAST_CLOCK)
+        setProgress(p)
+        if (p < 1) raf.current = requestAnimationFrame(tick)
+        else complete()
+      }
+      raf.current = requestAnimationFrame(tick)
+    } else if (step.kind === 'repeat') {
       play('click')
-      const n = count + 1
-      setCount(n)
+      const n = Math.round(progress * (step.times ?? 3)) + 1
+      setProgress(n / (step.times ?? 3))
       if (n >= (step.times ?? 3)) complete()
     }
   }
 
   const holdStart = () => {
-    if (step.kind !== 'hold' || flags.has(step.id)) return
+    if (step.kind !== 'hold' || flags.has(step.id) || holding !== null) return
     const t0 = performance.now()
     setHolding(0)
-    const tick = (now: number) => { setHolding((now - t0) / 1000); raf.current = requestAnimationFrame(tick) }
+    const tick = (now: number) => { const e = (now - t0) / 1000; setHolding(e); setProgress(Math.min(1, e / 10)); raf.current = requestAnimationFrame(tick) }
     raf.current = requestAnimationFrame(tick)
   }
   const holdEnd = () => {
@@ -129,27 +140,34 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
     complete()
   }
 
+  const drag = (v: number) => {
+    setProgress(v / 100)
+    if (v >= 100) complete()
+  }
+
   const lower = (a: number) => {
     const now = performance.now()
     samples.current.push({ from: angle, t: now })
     samples.current = samples.current.filter((s) => now - s.t < 200)
     setAngle(a)
+    setProgress(1 - a / 45)
     if (a <= 0) {
       const first = samples.current[0]
       const span = Math.max(0.1, (now - first.t) / 1000 + 0.016)
       setBubbles(makeBubbles((first.from - a) / span))
+      play('drop')
       complete()
     }
   }
 
   const redo = () => {
-    setIndex(0); setFlags(new Set()); setBubbles([]); setHeld({}); setFinished(false); setCount(0); setClock(null); setHolding(null); setAngle(45)
+    cancelAnimationFrame(raf.current)
+    setIndex(0); setFlags(new Set()); setBubbles([]); setHeld({}); setFinished(false); setProgress(0); setRunning(false); setHolding(null); setAngle(45)
   }
 
   const outcome: PrepOutcome = { flags, bubbles, held }
   const verdict = finished ? def.verdict(outcome) : null
-  const Icon = tool.icon
-  const busy = clock !== null || flags.has(step.id)
+  const doneNow = flags.has(step.id)
 
   return (
     <div className="station prep">
@@ -171,7 +189,7 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
                   <Lightbulb size={18} className="mt-0.5 flex-none text-[#9a6400]" /> {step.tip}
                 </p>
               )}
-              {flags.has(step.id) && <p className="mt-4 flex items-center gap-2 font-extrabold text-[var(--color-ok)]"><CheckCircle2 size={20} /> Done</p>}
+              {doneNow && <p className="mt-4 flex items-center gap-2 font-extrabold text-[var(--color-ok)]"><CheckCircle2 size={20} /> Done</p>}
             </>
           ) : (
             <>
@@ -187,58 +205,50 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
       </aside>
 
       <section className="prep-bench card" aria-label="Lab bench">
-        <div className="grid min-h-0 place-items-center p-2">
-          <def.Slide flags={flags} bubbles={bubbles} active={finished ? null : step.id} />
-        </div>
-        <div className="grid gap-3 border-t border-[var(--color-line)] p-3">
-          {!finished && step.kind === 'lower' && (
-            <div className="prep-lower">
-              <span className="text-sm font-extrabold text-[var(--color-muted)]">Down</span>
-              <input
-                type="range" min={0} max={45} step={1} value={angle}
-                onChange={(e) => lower(Number(e.target.value))}
-                aria-label="Lower the coverslip"
-                className="ctl-range prep-range attention"
-                style={{ ['--fill' as string]: `${(angle / 45) * 100}%`, ['--tint' as string]: 'var(--color-primary)' }}
-              />
-              <span className="text-sm font-extrabold text-[var(--color-muted)]">Raised</span>
-            </div>
-          )}
-          {!finished && step.kind === 'timer' && clock !== null && (
-            <div className="flex items-center justify-center gap-3 font-display text-2xl font-bold tabular-nums">
-              <Clock className="text-[var(--color-primary)]" />
-              {fmt(clock)} <span className="text-base text-[var(--color-muted)]">of {fmt(step.seconds ?? 60)}</span>
-            </div>
-          )}
-          {!finished && step.kind === 'hold' && (
-            <div className="text-center">
-              <div className="font-display text-3xl font-bold tabular-nums">{(holding ?? 0).toFixed(1)} s</div>
-              <div className="text-sm font-bold text-[var(--color-muted)]">Press and hold the {tool.name.toLowerCase()}, let go to stop.</div>
-            </div>
-          )}
-          {!finished && step.kind === 'repeat' && (
-            <div className="text-center font-display text-xl font-bold">{count} of {step.times ?? 3}</div>
-          )}
-          <div className="prep-tray">
-            {!finished && step.kind !== 'lower' && (
-              <button
-                type="button"
-                className={`prep-tool ${busy ? '' : 'attention'}`}
-                style={{ ['--tool' as string]: tool.colour }}
-                disabled={busy && step.kind !== 'hold'}
-                onClick={step.kind === 'hold' ? undefined : press}
-                onPointerDown={step.kind === 'hold' ? (e) => { e.currentTarget.setPointerCapture(e.pointerId); holdStart() } : undefined}
-                onPointerUp={step.kind === 'hold' ? holdEnd : undefined}
-                onPointerCancel={step.kind === 'hold' ? holdEnd : undefined}
-                onKeyDown={step.kind === 'hold' ? (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); holdStart() } } : undefined}
-                onKeyUp={step.kind === 'hold' ? (e) => { if (e.key === ' ' || e.key === 'Enter') holdEnd() } : undefined}
-              >
-                <Icon size={28} />
-                <span>{toolVerb(step)}</span>
-              </button>
+        <Ctx.Provider value={{ active: finished || doneNow ? null : step.id, act, holdStart, holdEnd, kind: finished ? null : step.kind }}>
+          <div className="min-h-0">
+            <def.Scene flags={flags} active={finished ? null : step.id} progress={finished ? 1 : progress} angle={angle} bubbles={bubbles} />
+          </div>
+        </Ctx.Provider>
+        {!finished && (
+          <div className="prep-action">
+            {step.kind === 'timer' && running ? (
+              <span className="flex items-center gap-2 font-display text-2xl font-bold tabular-nums">
+                <Clock className="text-[var(--color-primary)]" /> {fmt(progress * (step.seconds ?? 60))} <span className="text-base text-[var(--color-muted)]">of {fmt(step.seconds ?? 60)}</span>
+              </span>
+            ) : step.kind === 'drag' || step.kind === 'lower' ? (
+              <div className="prep-lower w-full">
+                <span className="text-sm font-extrabold text-[var(--color-muted)]">{step.kind === 'lower' ? 'Down' : 'Start'}</span>
+                {step.kind === 'lower' ? (
+                  <input type="range" min={0} max={45} step={1} value={angle} onChange={(e) => lower(Number(e.target.value))} aria-label={step.action}
+                    className="ctl-range prep-range attention" style={{ ['--fill' as string]: `${(angle / 45) * 100}%`, ['--tint' as string]: 'var(--color-primary)' }} />
+                ) : (
+                  <input type="range" min={0} max={100} step={1} value={Math.round(progress * 100)} onChange={(e) => drag(Number(e.target.value))} aria-label={step.action} disabled={doneNow}
+                    className="ctl-range prep-range attention" style={{ ['--fill' as string]: `${progress * 100}%`, ['--tint' as string]: 'var(--color-primary)' }} />
+                )}
+                <span className="text-sm font-extrabold text-[var(--color-muted)]">{step.kind === 'lower' ? 'Raised' : 'End'}</span>
+              </div>
+            ) : (
+              <span className="flex flex-wrap items-center justify-center gap-3">
+                {!(step.kind === 'hold' && holding !== null) && <span className="text-lg font-extrabold">{step.action}</span>}
+                {step.kind === 'repeat' && <span className="rounded-full bg-[var(--color-sunk)] px-3 py-1 font-bold tabular-nums">{Math.round(progress * (step.times ?? 3))} of {step.times ?? 3}</span>}
+                {step.kind !== 'hold' && (
+                  <button type="button" className="btn btn-ghost" onClick={act} disabled={doneNow || running}>Do it</button>
+                )}
+                {step.kind === 'hold' && holding !== null && (
+                  <span className="font-display text-2xl font-bold tabular-nums">{holding.toFixed(1)} s <span className="text-base text-[var(--color-muted)]">let go to stop</span></span>
+                )}
+                {/* The hold button stays mounted while held, so letting go is always detected. */}
+                {step.kind === 'hold' && (
+                  <button type="button" className="btn btn-ghost" onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); holdStart() }} onPointerUp={holdEnd} onPointerCancel={holdEnd}
+                    onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); holdStart() } }} onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') holdEnd() }}>
+                    Press and hold
+                  </button>
+                )}
+              </span>
             )}
           </div>
-        </div>
+        )}
       </section>
     </div>
   )
@@ -247,11 +257,4 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
 function fmt(sec: number) {
   const s = Math.floor(sec)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-function toolVerb(step: PrepStep) {
-  const name = TOOLS[step.tool].name
-  if (step.kind === 'hold') return `Hold: ${name}`
-  if (step.kind === 'repeat') return `${name} (pass ${step.times ?? 3} times)`
-  return `Use: ${name}`
 }

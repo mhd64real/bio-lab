@@ -36,20 +36,19 @@ async function answer() {
 async function prep(label) {
   for (let i = 0; i < 40; i++) {
     if (await btn('Take it to the microscope').count()) { await shot(`${label}-result`); await btn('Take it to the microscope').click(); await page.waitForTimeout(600); return }
-    const lowerer = page.locator('input[aria-label="Lower the coverslip"]')
-    if (await lowerer.count()) {
-      for (let a = 44; a >= 0; a -= 1) { await lowerer.fill(String(a)); await page.waitForTimeout(25) }
-      await page.waitForTimeout(800); continue
+    const slider = page.locator('.prep-action input[type=range]')
+    if (await slider.count()) {
+      const lowering = (await slider.getAttribute('max')) === '45'
+      for (let v = 1; v <= 30; v++) { await slider.fill(String(lowering ? Math.round(45 - 1.5 * v) : Math.round(v * 3.34))); await page.waitForTimeout(30) }
+    } else if (await btn('Press and hold').count()) {
+      const b = await btn('Press and hold').boundingBox()
+      await page.mouse.move(b.x + 20, b.y + 10); await page.mouse.down(); await page.waitForTimeout(5000); await page.mouse.up()
+    } else if (await btn('Do it').isEnabled().catch(() => false)) {
+      await page.locator('.hot-on').first().dispatchEvent('click')
+      await page.waitForTimeout(150)
+      if (await page.locator('.prep-action .tabular-nums').count()) await page.waitForTimeout(2800)
     }
-    const tool = page.locator('.prep-tool')
-    if (!(await tool.count())) { await page.waitForTimeout(300); continue }
-    const text = await tool.innerText()
-    if (text.startsWith('Hold')) {
-      const box = await tool.boundingBox()
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(5000); await page.mouse.up()
-    } else if (await tool.isEnabled()) { await tool.click() }
-    await page.waitForTimeout(text.includes('times') ? 150 : 900)
-    if (await page.locator('.prep-bench .tabular-nums').count()) await page.waitForTimeout(2800)
+    await page.waitForTimeout(800)
   }
   throw new Error('prep stuck: ' + label)
 }
