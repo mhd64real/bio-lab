@@ -56,3 +56,14 @@ export const progress = {
 export function useProgress() {
   return useSyncExternalStore(progress.subscribe, progress.get, progress.get)
 }
+
+// Dev server only: open every built phase without finishing the ones before it.
+// Turn on with #/dev/unlock, off with #/dev/lock. Never active in the public build.
+const DEV_KEY = 'bio-lab:dev-unlock'
+export function devUnlocked() {
+  if (!import.meta.env.DEV) return false
+  try { return localStorage.getItem(DEV_KEY) === '1' } catch { return false }
+}
+export function setDevUnlocked(on: boolean) {
+  try { if (on) localStorage.setItem(DEV_KEY, '1'); else localStorage.removeItem(DEV_KEY) } catch { /* ignore */ }
+}

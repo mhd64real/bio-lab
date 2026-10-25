@@ -1,6 +1,6 @@
 import { CheckCircle2, Lock, Microscope } from 'lucide-react'
 import { SoundToggle } from './ui/kit'
-import { useProgress } from './lib/storage'
+import { devUnlocked, useProgress } from './lib/storage'
 
 export const PHASES = [
   { id: 'p0', n: 0, title: 'Lab orientation', pages: 'Before the lesson', blurb: 'Learn the microscope, prepare a slide, meet the other instruments.', ready: true },
@@ -24,6 +24,7 @@ export function Home() {
           <div className="font-display text-xl font-bold leading-tight">Bio Lab</div>
           <div className="text-sm text-[var(--color-muted)]">Lesson 4: Structures and Organelles</div>
         </div>
+        {devUnlocked() && <a href="#/dev/lock" className="icon-btn" title="Dev server only">Tester mode on</a>}
         <SoundToggle />
       </header>
       <main className="mx-auto max-w-5xl p-4">
@@ -38,7 +39,7 @@ export function Home() {
           {PHASES.map((p, i) => {
             const st = phases[p.id]
             // Phases open in order: each one needs the previous phase finished.
-            const open = p.ready && (i === 0 || !!phases[PHASES[i - 1].id]?.done)
+            const open = p.ready && (i === 0 || devUnlocked() || !!phases[PHASES[i - 1].id]?.done)
             const done = st?.done
             const inner = (
               <>
