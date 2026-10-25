@@ -314,11 +314,14 @@ export const EMPTY: SpecimenDef = {
 }
 
 import { ELODEA, POND } from './specimensLive'
+import { PEPPER, POTATO } from './specimensP5'
 
 export const SPECIMENS: Record<string, SpecimenDef> = {
   'letter-e': LETTER_E,
   pond: POND,
   elodea: ELODEA,
+  pepper: PEPPER,
+  potato: POTATO,
   onion: ONION,
   cheek: CHEEK,
   yogurt: YOGURT,

@@ -34,7 +34,7 @@ export type SlideState = 'none' | 'loose' | 'clipped'
 
 export interface Bubble { x: number; y: number; r: number }
 
-export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt' | 'pond' | 'elodea'
+export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt' | 'pond' | 'elodea' | 'pepper' | 'potato'
 
 export interface Mount {
   specimen: SpecimenId

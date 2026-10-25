@@ -19,7 +19,7 @@ export interface TemState {
   damage: number // accumulated electron dose on the current area
   burnAt: { x: number; y: number } | null
   interlock: number // last time the airlock interlock refused, for the message
-  specimen: 'centrosome' | 'cilia' | 'nucleus'
+  specimen: 'centrosome' | 'cilia' | 'nucleus' | 'leaf'
 }
 
 export type TemAction =
@@ -115,3 +115,6 @@ export const NUCLEUS = (() => {
   const w = 1 + 0.03 * Math.sin(3 * th + 1) + 0.02 * Math.sin(5 * th + 2)
   return { pore: { x: ax[0] * w * Math.cos(th), y: ax[1] * w * Math.sin(th) }, nucleolus: { x: 1.2, y: 0.8 } }
 })()
+
+// In the 'leaf' section, the middle cell's first chloroplast and first mitochondrion (see leafTissue).
+export const LEAF = { chloroplast: { x: 0, y: 9.6 - 1.6 }, mito: { x: Math.cos(1.05) * (9.6 - 0.75), y: Math.sin(1.05) * (9.6 - 0.75) } }

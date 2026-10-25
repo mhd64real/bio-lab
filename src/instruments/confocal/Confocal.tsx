@@ -31,7 +31,7 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
         uHaze: Math.max(0, (s.pinhole - 1) / 4) * (s.objective === 63 ? 1 : 0.3),
         uSoft: (dry ? 9 : 1) + (s.pinhole - 0.5) * 0.6,
         uRange: s.range,
-        uSpec: s.specimen === 'nuclei' ? 1 : 0,
+        uSpec: s.specimen === 'mito' ? 2 : s.specimen === 'nuclei' ? 1 : 0,
       }}
     />
   )
@@ -121,6 +121,8 @@ export const CONFOCAL: Instrument<ConfocalState, ConfocalAction> = {
     if (n.pinhole < 1.3 && n.scanning) f.push('pinholeClosed')
     if (n.laserPower > 0.9 && n.scanning && bleach(n) < 0.85) f.push('bleachSeen')
     if (n.timelapse && n.scanning) f.push('timelapseSeen')
+    // The marked mitochondrion divides and fuses once every 3 s in time-lapse: 4 s of watching shows a full cycle.
+    if (n.specimen === 'mito' && n.timelapse && n.scanning && n.lasers[488] && n.zoom === 4 && performance.now() / 1000 - n.timelapseSince > 4) f.push('divisionSeen')
     return f
   },
   trouble: (s) => (s.scanning && bleach(s) < 0.35

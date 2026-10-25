@@ -24,7 +24,7 @@ function TemView({ state: s }: { state: TemState }) {
           uDefocusSign: s.defocus < 0 ? 1 : -1,
           uSpecimen: s.holder === 'in',
           uFalse: s.falseColour,
-          uSpec: s.specimen === 'nucleus' ? 2 : s.specimen === 'cilia' ? 1 : 0,
+          uSpec: s.specimen === 'leaf' ? 3 : s.specimen === 'nucleus' ? 2 : s.specimen === 'cilia' ? 1 : 0,
         }}
       />
       {live && s.holder === 'in' && (

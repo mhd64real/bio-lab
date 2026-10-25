@@ -9,7 +9,7 @@ uniform vec2 uRes;
 uniform float uFov;
 uniform vec2 uStage;
 uniform vec3 uBurn; // x, y, on
-uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus
+uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus, 3 leaf
 out vec4 outColor;
 ${NOISE}
 
@@ -244,6 +244,133 @@ float nucleusSection(vec2 nq, vec2 ax, float seed, vec3 nucleolus, bool home) {
   return max(dens, max(memb, plug));
 }
 
+
+// A mitochondrion cut lengthwise: smooth outer membrane, inner membrane folded into cristae that reach
+// into the dense matrix. lq: local coords (x along the long axis), ax: semi-axes.
+float mitoTem(vec2 lq, vec2 ax, float seed) {
+  float e = length(lq / ax);
+  if (e > 1.15) return -1.0;
+  float rl = length(lq) / max(e, 1e-4);
+  float dE = (e - 1.0) * rl; // um, negative inside
+  float outer = softLine(dE, 0.006);
+  float inner = softLine(dE + 0.022, 0.006);
+  // Cristae: folds of the inner membrane running across the width, each a pair of membranes
+  // around a narrow pale space, stopping short of the far side.
+  float k = floor(lq.x / 0.11 + 0.5);
+  float cx = k * 0.11 + 0.025 * (hash12(vec2(k, seed)) - 0.5);
+  float reach = ax.y * (0.7 + 0.8 * hash12(vec2(k, seed + 3.0)));
+  float fromSide = (hash12(vec2(k, seed + 5.0)) > 0.5 ? 1.0 : -1.0);
+  float dist = ax.y - fromSide * lq.y; // depth from the side it grows from
+  float wav = 0.01 * sin(lq.y * 14.0 + k);
+  float along = smoothstep(reach + 0.02, reach - 0.02, dist) * step(-0.022, -dE - 0.02);
+  float cr = max(softLine(lq.x - cx - wav - 0.011, 0.0055), softLine(lq.x - cx - wav + 0.011, 0.0055)) * along;
+  float space = (1.0 - smoothstep(0.003, 0.007, abs(lq.x - cx - wav))) * along;
+  float matrix = 0.42 + 0.08 * fbm(lq * 30.0 + seed) + 0.1 * (vnoise(lq * 180.0) - 0.5) * lod(0.012);
+  // Small dark matrix granules.
+  matrix += 0.3 * smoothstep(0.25, 0.1, voronoi(lq / 0.12 + seed).x) * step(0.93, hash12(floor(lq / 0.12 + seed))) * lod(0.02);
+  float d = dE < -0.022 ? matrix : (dE < 0.0 ? 0.22 : 0.0);
+  d = mix(d, 0.3, space * lod(0.015));
+  d = max(d, max(outer, inner) * 0.8);
+  d = max(d, cr * 0.85 * lod(0.015));
+  d = mix(d, 0.55, (1.0 - lod(0.015)) * step(dE, -0.03) * 0.5);
+  // Below the resolution of the view, cristae blur into an even grey.
+  return e <= 1.0 + 0.01 / rl ? d : (outer > 0.05 ? outer * 0.8 : -1.0);
+}
+
+// A chloroplast, lens shaped: double envelope, granular stroma, grana (stacks of disc-shaped thylakoids,
+// seen edge on as fine parallel lines) joined by single stroma thylakoids, a starch grain and dark plastoglobuli.
+float chloroTem(vec2 lq, vec2 ax, float seed) {
+  float e = length(lq / ax);
+  if (e > 1.1) return -1.0;
+  float rl = length(lq) / max(e, 1e-4);
+  float dE = (e - 1.0) * rl;
+  float env = max(softLine(dE, 0.006), softLine(dE + 0.02, 0.006));
+  float stroma = 0.3 + 0.06 * fbm(lq * 12.0 + seed) + 0.12 * (vnoise(lq * 160.0) - 0.5) * lod(0.012);
+  // Thylakoid membranes follow the long axis, gently curved with the lens.
+  float bend = lq.y + 0.06 * lq.x * lq.x / ax.x;
+  float inner = step(dE, -0.06);
+  // Grana: stacks about 0.45 um wide, every 0.6 um, 0.15 to 0.45 um tall, offset up and down.
+  float gk = floor(lq.x / 0.42 + 0.5);
+  float gcx = gk * 0.42 + 0.06 * (hash12(vec2(gk, seed)) - 0.5);
+  float gcy = (hash12(vec2(gk, seed + 1.0)) - 0.5) * ax.y * 0.9;
+  float gh = 0.08 + 0.16 * hash12(vec2(gk, seed + 2.0));
+  vec2 sd = vec2((lq.x - gcx) / 0.17, (bend - gcy) / (gh * 0.5));
+  float inStack = smoothstep(1.05, 0.95, pow(pow(abs(sd.x), 4.0) + pow(abs(sd.y), 4.0), 0.25));
+  float stackLines = softLine(abs(fract(bend / 0.02) - 0.5) * 0.02, 0.0035);
+  float grana = inStack * stackLines;
+  float granaBlur = inStack * 0.68; // unresolved at low magnification: a dark block
+  // Stroma thylakoids: single pairs of membranes running between the grana.
+  float sl = softLine(abs(fract((bend + 0.03) / 0.07) - 0.5) * 0.07, 0.0045);
+  sl *= step(0.3, vnoise(vec2(lq.x * 1.5, floor((bend + 0.03) / 0.07) + seed)));
+  float thyl = max(mix(granaBlur, max(grana * 0.9, inStack * 0.45), lod(0.02)), sl * 0.6) * inner;
+  float d = max(stroma, thyl);
+  d = max(d, 0.4 * inStack * lod(0.02) * (0.6 + 0.4 * stackLines));
+  // Starch grain: an empty-looking pale ellipse.
+  vec2 sq = (lq - vec2(ax.x * 0.3, -ax.y * 0.2)) / vec2(0.5, 0.22);
+  d = mix(d, 0.07, (1.0 - smoothstep(0.9, 1.0, length(sq))) * inner);
+  // Plastoglobuli: small, very dense droplets.
+  vec2 pg = voronoi(lq / 0.35 + seed);
+  d = max(d, 0.85 * (1.0 - smoothstep(0.1, 0.16, pg.x)) * step(0.82, hash12(floor(lq / 0.35 + seed))) * inner * lod(0.03));
+  d = dE < 0.0 ? d : 0.0;
+  d = max(d, env * 0.8);
+  return e <= 1.0 + 0.01 / rl ? d : (env > 0.05 ? env * 0.8 : -1.0);
+}
+
+float leafTissue(vec2 p) {
+  // Leaf mesophyll cells on a 24 um grid; the cell at the origin is centred exactly.
+  vec2 g0 = floor(p / 24.0 + 0.5);
+  float d1 = 1e9, d2 = 1e9; vec2 id = g0, cc = vec2(0.0);
+  float nearN = 1e9;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 gg = g0 + vec2(x, y);
+    vec2 c = gg * 24.0 + ((gg.x == 0.0 && gg.y == 0.0) ? vec2(0.0) : (hash22(gg) - 0.5) * 6.0);
+    float d = length(p - c);
+    if (d < d1) { d2 = d1; d1 = d; id = gg; cc = c; } else if (d < d2) d2 = d;
+  }
+  float border = (d2 - d1) * 0.5;
+  bool home = id.x == 0.0 && id.y == 0.0;
+  vec2 q = p - cc;
+  float seed = hash12(id) * 40.0;
+  // Rounded cells with air spaces between them (spongy leaf tissue); the wall is a fibrous band.
+  float rIn = home ? 9.6 : 8.0 + 1.5 * hash12(id + 4.0);
+  float th0 = atan(q.y, q.x);
+  float rEdge = rIn + 0.35 + (home ? 0.0 : 0.6 * sin(3.0 * th0 + seed));
+  float depth = min(rEdge - length(q), border - 0.2); // distance in from the outer face of the wall
+  if (depth < 0.0) return 0.04 + 0.02 * fbm(p * 2.0); // air space: only resin
+  float wallD = 0.4 + 0.12 * vnoise(p * 60.0) * lod(0.02);
+  if (depth < 0.25) return wallD;
+  float memb = softLine(depth - 0.26, 0.005) * 0.8;
+  // A thin layer of cytoplasm against the wall; the big central vacuole fills the rest.
+  float cyto = 0.28 + 0.07 * fbm(p * 3.0) + 0.14 * smoothstep(0.32, 0.12, voronoi(p * 28.0).x) * lod(0.02);
+  float tono = softLine(depth - 0.7, 0.005) * 0.75;
+  float dens = depth > 0.7 ? 0.05 + 0.02 * fbm(p * 2.0) : cyto;
+  dens = max(dens, max(memb, tono));
+  // Chloroplasts around the cell, lying along the wall.
+  float th = atan(q.y, q.x);
+  for (int k = 0; k < 10; k++) {
+    float fk = float(k);
+    float a = (home && k == 0) ? 1.5707963 : (fk + 0.35 * (hash12(vec2(fk, seed)) - 0.5)) * 0.6283185 + 1.5707963;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 cc2 = dir * (rIn - 1.6);
+    vec2 lq = vec2(dot(q - cc2, vec2(-dir.y, dir.x)), dot(q - cc2, dir));
+    float c = chloroTem(lq, vec2(2.6, 1.0), seed + fk * 7.0);
+    if (c >= 0.0) { dens = c; break; }
+    if (length(lq / vec2(2.9, 1.3)) < 1.0) { dens = max(cyto, memb); }
+  }
+  // Mitochondria in the cytoplasm between chloroplasts; the first one in the middle cell is placed exactly.
+  for (int k = 0; k < 4; k++) {
+    float fk = float(k);
+    float a = (home && k == 0) ? 1.05 : 1.05 + fk * 1.6 + hash12(vec2(fk, seed + 9.0));
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 mc = dir * (rIn - 0.75);
+    vec2 lq = vec2(dot(q - mc, vec2(-dir.y, dir.x)), dot(q - mc, dir));
+    float m = mitoTem(lq, vec2(0.6, 0.3), seed + fk * 3.0);
+    if (m >= 0.0) { dens = m; break; }
+    if (length(lq / vec2(0.8, 0.5)) < 1.0) dens = max(cyto, memb);
+  }
+  return dens;
+}
+
 float nucleusTissue(vec2 p) {
   float dens = 0.06 + 0.03 * fbm(p * 0.8);
   vec2 g = floor(p / 26.0 + 0.5);
@@ -280,7 +407,8 @@ void main() {
   vec2 p = uStage + v * uFov;
 
   float dens;
-  if (uSpec > 1.5) dens = nucleusTissue(p);
+  if (uSpec > 2.5) dens = leafTissue(p);
+  else if (uSpec > 1.5) dens = nucleusTissue(p);
   else if (uSpec > 0.5) dens = ciliaSection(p);
   else {
   // Resin section: nearly transparent, with faint texture.

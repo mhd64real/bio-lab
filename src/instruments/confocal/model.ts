@@ -5,7 +5,7 @@
 
 export type Laser = 405 | 488 | 640
 export const LASERS: Laser[] = [405, 488, 640]
-export type ConfocalSpecimen = 'cyto' | 'nuclei'
+export type ConfocalSpecimen = 'cyto' | 'nuclei' | 'mito'
 type LaserInfo = { name: string; target: string; colour: string }
 export const LASER_INFO: Record<ConfocalSpecimen, Partial<Record<Laser, LaserInfo>>> = {
   cyto: {
@@ -17,7 +17,14 @@ export const LASER_INFO: Record<ConfocalSpecimen, Partial<Record<Laser, LaserInf
     405: { name: '405 nm', target: 'Hoechst: DNA', colour: '#6d5cf6' },
     488: { name: '488 nm', target: 'GFP: nuclear pore protein', colour: '#22b455' },
   },
+  mito: {
+    405: { name: '405 nm', target: 'Hoechst: nucleus (DNA)', colour: '#6d5cf6' },
+    488: { name: '488 nm', target: 'MitoTracker Green: mitochondria', colour: '#22b455' },
+  },
 }
+// The mitochondrion that divides and fuses again, in the middle of the 'mito' dish (um), and its cycle
+// in specimen time units (seconds when live; 20 times faster in time-lapse). See mitoField in shaders.ts.
+export const MITO = { x: 6, y: 4, period: 60 }
 // Geometry of the nucleus in the middle of the 'nuclei' dish: an ellipsoid, micrometres.
 export const NUC = { zc: 4.5, c: 3.2 }
 
@@ -39,6 +46,7 @@ export interface ConfocalState {
   range: boolean
   dose: number // accumulated light dose on this field of view (bleaches the dyes)
   specimen: ConfocalSpecimen
+  timelapseSince: number // seconds (performance clock) when the time-lapse was last switched on
 }
 
 export type ConfocalAction =
@@ -77,6 +85,7 @@ export function initialConfocal(): ConfocalState {
     range: false,
     dose: 0,
     specimen: 'cyto',
+    timelapseSince: 0,
   }
 }
 
@@ -97,7 +106,7 @@ export function confocalReducer(s: ConfocalState, a: ConfocalAction): ConfocalSt
     case 'focus': return s.dish ? { ...s, z: clamp(s.z + a.dz, -40, 20) } : s
     case 'scan': return s.power && s.dish ? { ...s, scanning: !s.scanning } : s
     case 'zoom': return { ...s, zoom: a.to }
-    case 'timelapse': return { ...s, timelapse: !s.timelapse }
+    case 'timelapse': return { ...s, timelapse: !s.timelapse, timelapseSince: performance.now() / 1000 }
     case 'range': return { ...s, range: !s.range }
     case 'newField': return { ...s, dose: 0 }
     case 'clean': return { ...s, oil: false }
@@ -129,6 +138,11 @@ export function inFocusAmount(s: ConfocalState) {
   if (s.specimen === 'nuclei') {
     const slab = Math.exp(-((Math.max(0, NUC.zc - NUC.c - s.z, s.z - NUC.zc - NUC.c) / th) ** 2))
     return s.lasers[405] || s.lasers[488] ? slab : 0
+  }
+  if (s.specimen === 'mito') {
+    if (s.lasers[488]) layers.push(Math.max(w(1.2), w(2.2)))
+    if (s.lasers[405]) layers.push(Math.max(w(2.5), w(4)))
+    return layers.length ? Math.max(...layers) : 0
   }
   if (s.lasers[640]) layers.push(w(0.3))
   if (s.lasers[488]) layers.push(w(0.9))

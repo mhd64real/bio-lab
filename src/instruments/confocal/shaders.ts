@@ -102,6 +102,81 @@ vec3 nucleiField(vec2 p, float t, float sig, float px) {
   return col;
 }
 
+// Living cells stained with MitoTracker Green (mitochondria) and Hoechst (nucleus). Mitochondria are
+// tubes 0.4 um wide and 1 to 6 um long, crowded around the nucleus, sliding back and forth along
+// microtubules. In the middle cell, one long mitochondrion (MITO in model.ts) pinches in two and fuses again.
+float capsule(vec2 p, vec2 a, vec2 b) { vec2 ab = b - a; float h = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0); return length(p - a - ab * h); }
+vec3 mitoField(vec2 p, float t, float sig, float px) {
+  const float SP = 80.0;
+  vec2 g = floor(p / SP + 0.5);
+  bool home = g.x == 0.0 && g.y == 0.0;
+  vec2 h = hash22(g + 7.0), h2 = hash22(g * 3.1 + 2.0);
+  if (!home && h.x < 0.2) return vec3(0.0);
+  vec2 c = g * SP + (home ? vec2(0.0) : (h - 0.5) * 14.0);
+  float ang = home ? 0.35 : h.y * 6.2831;
+  float R = home ? 30.0 : 24.0 + 7.0 * h.x;
+  vec2 q = rot(-ang) * (p - c);
+  vec2 pc = p - c; // unrotated, for the marked mitochondrion
+  float th = atan(q.y, q.x);
+  float ph = h2.x * 6.2831;
+  float rad = R * (1.0 + 0.22 * sin(3.0 * th + ph) + 0.12 * sin(5.0 * th + 2.0 * ph));
+  float d = rad - length(q);
+  float inside = smoothstep(-sig, sig, d);
+  vec2 nc = vec2(-7.0, -1.0);
+  vec2 nq = q - nc;
+  float nr = length(nq / vec2(9.5, 7.0));
+  float nuc = (1.0 - smoothstep(1.0 - px / 7.0 - 0.04, 1.0, nr)) * (0.65 + 0.45 * fbm(nq * 0.55 + g * 9.0));
+  nuc *= 1.0 - 0.55 * (1.0 - smoothstep(1.0, 2.2, length(nq - vec2(2.0, 1.0))));
+
+  float w = 0.2;
+  float m = 0.0;
+  for (int i = 0; i < 150; i++) {
+    float fi = float(i);
+    vec2 hi = hash22(vec2(fi, 13.0) + g * 1.7);
+    vec2 hj = hash22(vec2(fi, 29.0) + g * 2.3);
+    // Position: around the nucleus, denser close to it.
+    float a = hi.x * 6.2831;
+    float er = R * (1.0 + 0.22 * sin(3.0 * a + ph) + 0.12 * sin(5.0 * a + 2.0 * ph));
+    float rr = mix(10.5, er - 3.0, pow(hi.y, 1.6));
+    vec2 mc = nc + vec2(cos(a), sin(a)) * rr;
+    if (length(q - mc) > 9.0) continue;
+    if (home && length(rot(ang) * mc - vec2(6.0, 4.0)) < 5.0) continue; // keep the marked one easy to see
+    float o = a + (hj.x - 0.5) * 1.4; // roughly radial, like the microtubules they ride on
+    vec2 dir = vec2(cos(o), sin(o));
+    float L = 1.0 + 5.0 * hj.y * hj.y;
+    mc += dir * 1.6 * sin(t * (0.03 + 0.05 * hj.x) + hi.y * 20.0);
+    vec2 nrm = vec2(-dir.y, dir.x);
+    vec2 lq = q - mc;
+    float u = dot(lq, dir);
+    lq -= nrm * 0.5 * sin(u * 0.9 + hj.x * 9.0 + t * 0.02) * min(1.0, L / 3.0); // gently curved
+    float dd = capsule(lq, -dir * L * 0.5, dir * L * 0.5);
+    m += exp(-dd * dd / (2.0 * (w * w + sig * sig))) * (0.7 + 0.4 * hj.x);
+  }
+  if (home) {
+    // The marked mitochondrion: 6 um long; it constricts in the middle, splits, the halves drift apart, then fuse.
+    float f = fract(t / 60.0 + 0.2);
+    float split = smoothstep(0.35, 0.55, f) * (1.0 - smoothstep(0.85, 0.98, f));
+    float gap = 1.6 * smoothstep(0.5, 0.75, f) * (1.0 - smoothstep(0.8, 0.98, f));
+    vec2 dir = normalize(vec2(1.0, 0.45));
+    vec2 lq = pc - vec2(6.0, 4.0);
+    float u = dot(lq, dir);
+    float side = sign(u);
+    lq -= dir * side * gap * 0.5;
+    u = dot(lq, dir);
+    float dd = capsule(lq, -dir * 3.0, dir * 3.0);
+    // Constriction: thinner near the middle as it splits, then a clean gap.
+    float neck = 1.0 - split * exp(-u * u / 0.15);
+    float wm = w * max(neck, 0.05);
+    float cut = 1.0 - step(0.5, split) * (1.0 - smoothstep(0.0, 0.25, abs(u) - gap * 0.0));
+    m += exp(-dd * dd / (2.0 * (wm * wm + sig * sig))) * 1.1 * max(cut, 1.0 - split) * smoothstep(0.0, 0.08, neck);
+  }
+  m = (1.0 - exp(-0.8 * m)) * inside;
+  vec3 col = vec3(0.0);
+  col += uCh.x * vec3(0.30, 0.48, 1.0) * nuc * slab(2.0, 5.0);
+  col += uCh.y * vec3(0.18, 1.0, 0.32) * m * (0.65 * layer(1.2) + 0.35 * layer(2.2));
+  return col;
+}
+
 void main() {
   // Frames arrive a few times a second, like a real scanning system.
   float t = floor(uTime * 4.0) / 4.0 * uSpeed;
@@ -109,6 +184,7 @@ void main() {
   vec2 p = v * uFov;
   float px = uFov / min(uRes.x, uRes.y);
   float sig = max(uPsf, px * 0.7);
+  if (uSpec > 1.5) { outColor = vec4(mitoField(p, t, sig, px), 1.0); return; }
   if (uSpec > 0.5) { outColor = vec4(nucleiField(p, t, sig, px), 1.0); return; }
 
   const float SP = 80.0;
