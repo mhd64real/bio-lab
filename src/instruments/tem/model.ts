@@ -19,6 +19,7 @@ export interface TemState {
   damage: number // accumulated electron dose on the current area
   burnAt: { x: number; y: number } | null
   interlock: number // last time the airlock interlock refused, for the message
+  specimen: 'centrosome' | 'cilia'
 }
 
 export type TemAction =
@@ -42,7 +43,7 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 export const temFov = (s: TemState) => 60000 / MAGS[s.mag]
 
 export function initialTem(): TemState {
-  return { holder: 'out', airlock: 0, ht: false, beam: false, brightness: 0.35, mag: 0, defocus: 1800, x: 34, y: 22, falseColour: false, damage: 0, burnAt: null, interlock: -1e9 }
+  return { holder: 'out', airlock: 0, ht: false, beam: false, brightness: 0.35, mag: 0, defocus: 1800, x: 34, y: 22, falseColour: false, damage: 0, burnAt: null, interlock: -1e9, specimen: 'centrosome' }
 }
 
 export function temReducer(s: TemState, a: TemAction): TemState {

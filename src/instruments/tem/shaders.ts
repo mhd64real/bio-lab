@@ -9,6 +9,7 @@ uniform vec2 uRes;
 uniform float uFov;
 uniform vec2 uStage;
 uniform vec3 uBurn; // x, y, on
+uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining
 out vec4 outColor;
 ${NOISE}
 
@@ -51,13 +52,85 @@ float centrioleLong(vec2 p) {
   return (walls * 0.9 + 0.18) * ends * lod(0.03) + 0.25 * step(q.x, 0.105) * ends;
 }
 
+// A cilium cut across: a membrane around 9 doublet microtubules and 2 single ones in the middle (9 + 2).
+float ciliumCross(vec2 p, float spin) {
+  float r = length(p);
+  if (r > 0.14) return 0.0;
+  float d = 0.2 * smoothstep(0.13, 0.12, r);
+  d = max(d, ring(r, 0.125, 0.008) * 0.9);
+  for (int i = 0; i < 9; i++) {
+    float a = float(i) * 6.2831853 / 9.0 + spin;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 tn = vec2(-dir.y, dir.x);
+    vec2 c = dir * 0.088;
+    d = max(d, mtEnd(p, c));
+    // The B tubule is incomplete: an arc fused onto the A tubule.
+    vec2 cb = c + tn * 0.017 + dir * 0.003;
+    float rb = length(p - cb);
+    float arc = ring(rb, 0.0105, 0.005) * step(0.0, dot(p - cb, tn) + 0.004);
+    d = max(d, arc * lod(0.025));
+    // Dynein arms: small hooks on the A tubule.
+    d = max(d, 0.6 * disc(length(p - (c - tn * 0.014 - dir * 0.004)), 0.0035) * lod(0.02));
+    // Radial spoke towards the centre.
+    vec2 sp = p - dir * 0.05;
+    d = max(d, 0.35 * (1.0 - smoothstep(0.002, 0.002 + gPx, abs(dot(sp, tn)))) * step(abs(dot(sp, dir)), 0.022) * lod(0.02));
+  }
+  vec2 cp = vec2(cos(spin * 3.0), sin(spin * 3.0)) * 0.015;
+  d = max(d, max(mtEnd(p, cp), mtEnd(p, -cp)));
+  return d;
+}
+
+float ciliaSection(vec2 p) {
+  float dens = 0.06 + 0.03 * fbm(p * 0.8);
+  // Cells on a jittered 7 um grid, cut across just below their tops; the cell at the origin is centred exactly.
+  vec2 g = floor(p / 7.0 + 0.5);
+  float d1 = 1e9, d2 = 1e9; vec2 id = g, cc = vec2(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 gg = g + vec2(x, y);
+    vec2 c = gg * 7.0 + ((gg.x == 0.0 && gg.y == 0.0) ? vec2(0.0) : (hash22(gg) - 0.5) * 3.0);
+    float d = length(p - c);
+    if (d < d1) { d2 = d1; d1 = d; id = gg; cc = c; } else if (d < d2) d2 = d;
+  }
+  float border = (d2 - d1) * 0.5;
+  bool home = id.x == 0.0 && id.y == 0.0;
+  bool goblet = !home && hash12(id + 11.0) < 0.28;
+  float memb = (1.0 - smoothstep(0.008, 0.008 + gPx * 1.5, border)) * 0.85;
+  if (goblet) {
+    // Pale mucus granules packed inside.
+    vec2 mv = voronoi((p - cc) / 0.9);
+    dens = 0.22 - 0.1 * smoothstep(0.45, 0.2, mv.x) + 0.25 * (1.0 - smoothstep(0.0, 0.05, mv.y - mv.x));
+  } else {
+    // Cilia packed in a hexagonal array; too small to see one by one at low magnification.
+    vec2 q = p - cc;
+    float sp = 0.33;
+    vec2 b = vec2(sp * 0.5, sp * 0.8660254);
+    float j = floor(q.y / b.y + 0.5);
+    float i = floor((q.x - j * b.x) / sp + 0.5);
+    float best = 1e9; vec2 bc = vec2(0.0); vec2 bk = vec2(0.0);
+    for (int dj = -1; dj <= 1; dj++) for (int di = -1; di <= 1; di++) {
+      vec2 k = vec2(i + float(di), j + float(dj));
+      vec2 c = vec2(k.x * sp + k.y * b.x, k.y * b.y);
+      float d = length(q - c);
+      if (d < best) { best = d; bc = c; bk = k; }
+    }
+    float spin = hash12(bk + id * 13.0) * 6.2831;
+    float cil = ciliumCross(q - bc, spin) * smoothstep(0.0, 0.5, border);
+    float tex = 0.3 + 0.2 * vnoise(p * 7.0) + 0.1 * vnoise(p * 1.3);
+    dens = max(0.14 + 0.05 * fbm(p * 2.0), mix(tex, cil, lod(0.08)));
+  }
+  return max(dens, memb);
+}
+
 void main() {
   vec2 v = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
   gPx = uFov / min(uRes.x, uRes.y);
   vec2 p = uStage + v * uFov;
 
+  float dens;
+  if (uSpec > 0.5) dens = ciliaSection(p);
+  else {
   // Resin section: nearly transparent, with faint texture.
-  float dens = 0.06 + 0.03 * fbm(p * 0.8);
+  dens = 0.06 + 0.03 * fbm(p * 0.8);
 
   // Cells sectioned at random heights on a 26 um grid; the cell at the origin is always there.
   vec2 g = floor(p / 26.0 + 0.5);
@@ -137,6 +210,7 @@ void main() {
     }
   }
 
+  }
   // Copper grid bars block the beam completely.
   vec2 gp = abs(fract(p / 85.0 + 0.5) - 0.5) * 85.0;
   float bar = smoothstep(32.0, 32.5, max(gp.x, gp.y));

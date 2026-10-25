@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { NOISE } from './glsl'
 import { EMPTY, SPECIMENS, type SpecimenDef } from './specimens'
 import { blurAt, optics, type ScopeState } from './model'
+import { specimenTime } from './clock'
 
 const VERT = /* glsl */ `#version 300 es
 in vec2 aPos;
@@ -22,10 +23,12 @@ uniform vec3 uBubbles[8];
 uniform int uBubbleCount;
 uniform float uVariant;
 uniform float uSeed;
+uniform float uTime;
 layout(location = 0) out vec4 outLayer0;
 layout(location = 1) out vec4 outLayer1;
 ${NOISE}
 float gPx; // slide millimetres per pixel, for anti-aliasing fine detail
+float gPhase; // optical thickness of colourless material (seen in phase contrast), 0..1
 ${def.helpers}
 // t0: the main focal plane. t1: a second plane (e.g. a nucleus) at the specimen's layer depth.
 void specimen(vec2 s, out vec3 t0, out vec3 t1) {
@@ -52,6 +55,7 @@ void main() {
     s += (hash22(floor(vec2(a * 1.43, r * 4.0))) - 0.5) * 0.02 * smoothstep(1.0, 0.0, r);
   }
   vec3 t, t1;
+  gPhase = 0.0;
   specimen(s, t, t1);
   for (int i = 0; i < 8; i++) {
     if (i >= uBubbleCount) break;
@@ -66,7 +70,7 @@ void main() {
     }
   }
   t = mix(t, vec3(0.05), crack * 0.9);
-  outLayer0 = vec4(clamp(t, 0.0, 1.0), 1.0);
+  outLayer0 = vec4(clamp(t, 0.0, 1.0), clamp(gPhase, 0.0, 1.0));
   outLayer1 = vec4(clamp(t1, 0.0, 1.0), 1.0);
 }
 `
@@ -80,23 +84,25 @@ uniform sampler2D uSharp1;
 uniform float uBlur;
 uniform float uBlur1;
 uniform float uHasLayer1;
+uniform float uPhaseMode;
+uniform float uRelief;
 uniform float uLight;
 uniform float uContrast;
 uniform float uGlare;
 uniform float uSeed;
 out vec4 outColor;
 ${NOISE}
-vec3 defocus(sampler2D tex, vec2 uv, float R) {
-  if (R < 0.6) return texture(tex, uv).rgb;
+vec4 defocus(sampler2D tex, vec2 uv, float R) {
+  if (R < 0.6) return texture(tex, uv);
   const int N = 32;
   float lod = log2(max(1.0, R * 1.7 / sqrt(float(N))));
-  vec3 acc = vec3(0.0);
+  vec4 acc = vec4(0.0);
   float rot = hash12(gl_FragCoord.xy) * 6.2831;
   for (int i = 0; i < N; i++) {
     float fi = float(i);
     float rr = sqrt((fi + 0.5) / float(N)) * R;
     float th = fi * 2.39996 + rot;
-    acc += textureLod(tex, uv + vec2(cos(th), sin(th)) * rr / uRes, lod).rgb;
+    acc += textureLod(tex, uv + vec2(cos(th), sin(th)) * rr / uRes, lod);
   }
   return acc / float(N);
 }
@@ -108,8 +114,15 @@ void main() {
   if (r > 1.0) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
 
   // Defocus: a disc blur per specimen plane, sampled from a coarser mip level as the disc grows.
-  vec3 t = defocus(uSharp, uv, uBlur * 2.0 * scale);
-  if (uHasLayer1 > 0.5) t *= defocus(uSharp1, uv, uBlur1 * 2.0 * scale);
+  vec4 t4 = defocus(uSharp, uv, uBlur * 2.0 * scale);
+  vec3 t = t4.rgb;
+  if (uHasLayer1 > 0.5) t *= defocus(uSharp1, uv, uBlur1 * 2.0 * scale).rgb;
+  // Colourless material: invisible in brightfield except a faint relief when the iris is closed;
+  // phase contrast turns optical thickness into darkness with a bright halo around it.
+  float ph = t4.a;
+  float halo = textureLod(uSharp, uv, 5.5 + log2(max(1.0, uBlur * scale))).a;
+  if (uPhaseMode > 0.5) t *= 0.78 * clamp(1.0 - 1.9 * ph + 1.6 * halo, 0.06, 1.8);
+  else t *= clamp(1.0 - 0.07 * ph + uRelief * (textureLod(uSharp, uv + 1.5 / uRes, 1.5).a - ph) * 3.0, 0.4, 1.3);
 
   // Light from a cool white LED, through the specimen.
   vec3 I = t * uLight * vec3(1.0, 0.985, 0.95);
@@ -249,6 +262,7 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1i(prog.uni('uBubbleCount'), bubbles.length)
       gl.uniform1f(prog.uni('uVariant'), s.mount?.variant ?? 0)
       gl.uniform1f(prog.uni('uSeed'), 0)
+      gl.uniform1f(prog.uni('uTime'), specimenTime())
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.uniform1i(prog.uni('uTex'), 0)
@@ -271,6 +285,8 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1f(u('uBlur'), o.blur)
       gl.uniform1f(u('uBlur1'), layered ? blurAt(s, def.layerZ ?? 0) : 0)
       gl.uniform1f(u('uHasLayer1'), layered ? 1 : 0)
+      gl.uniform1f(u('uPhaseMode'), s.phase ? 1 : 0)
+      gl.uniform1f(u('uRelief'), (1 - s.iris) * 0.8)
       gl.uniform1f(u('uLight'), o.light)
       gl.uniform1f(u('uContrast'), o.contrast)
       gl.uniform1f(u('uGlare'), o.glare)
@@ -293,13 +309,13 @@ export function OpticalView({ state }: { state: ScopeState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<Renderer | null>(null)
   const stateRef = useRef(state)
+  const lastChange = useRef(0)
   const frame = useRef(0)
   stateRef.current = state
 
-  const lastChange = useRef(0)
-  const settle = useRef(0)
+    const settle = useRef(0)
   const schedule = () => {
-    const now = performance.now()
+    const now = Date.now()
     // Changes arriving in quick succession mean a control is being held: draw fast, then sharpen once it stops.
     const moving = now - lastChange.current < 150
     lastChange.current = now
@@ -335,6 +351,16 @@ export function OpticalView({ state }: { state: ScopeState }) {
   }, [])
 
   useEffect(schedule, [state])
+
+  // Living specimens keep moving, so they are redrawn every frame while visible.
+  const animated = state.slide !== 'none' && !!state.mount && !!SPECIMENS[state.mount.specimen]?.animated && state.lampOn
+  useEffect(() => {
+    if (!animated) return
+    let raf = 0
+    const loop = () => { rendererRef.current?.draw(stateRef.current, Date.now() - lastChange.current < 150); raf = requestAnimationFrame(loop) }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [animated])
 
   return (
     <div ref={wrapRef} className="eyepiece-wrap">

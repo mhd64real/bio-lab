@@ -40,6 +40,7 @@ export function useScope(init: () => ScopeState) {
     stageTap: () => { if (mountRef.current) dispatch({ type: 'placeSlide', mount: mountRef.current }) },
     clip: () => dispatch({ type: 'clip' }),
     oil: () => dispatch({ type: 'oil' }),
+    phase: () => dispatch({ type: 'phase' }),
     cleanLens: () => dispatch({ type: 'cleanLens' }),
     place: (mount) => { mountRef.current = mount; dispatch({ type: 'placeSlide', mount }) },
     remove: () => dispatch({ type: 'removeSlide' }),

@@ -18,6 +18,7 @@ export function OpticsLab() {
     slide: q.get('slide') === '0' ? 'none' as const : 'clipped' as const,
     broken: q.get('broken') === '1',
     oil: q.get('oil') !== '0',
+    phase: q.get('phase') === '1',
     mount: { specimen: (q.get('sp') ?? 'letter-e') as SpecimenId, variant: Number(q.get('var') ?? 0), bubbles: q.get('bubbles') === '1' ? [{ x: 0.9, y: 0.6, r: 0.35 }, { x: -1.1, y: -0.4, r: 0.18 }] : [] },
   }
   const [s] = useReducer(scopeReducer, init)

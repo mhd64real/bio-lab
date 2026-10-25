@@ -34,7 +34,7 @@ export type SlideState = 'none' | 'loose' | 'clipped'
 
 export interface Bubble { x: number; y: number; r: number }
 
-export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt'
+export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt' | 'pond' | 'elodea'
 
 export interface Mount {
   specimen: SpecimenId
@@ -54,6 +54,7 @@ export interface ScopeState {
   slide: SlideState
   broken: boolean
   crackAt: { x: number; y: number } // slide position (mm) that hit the lens
+  phase: boolean // condenser set to phase contrast
   oil: boolean // immersion oil on the slide
   lensOily: boolean // the 100x lens has been in oil and needs wiping
   mount: Mount | null
@@ -80,6 +81,7 @@ export function initialScope(): ScopeState {
     slide: 'none',
     broken: false,
     crackAt: { x: 0, y: 0 },
+    phase: false,
     oil: false,
     lensOily: false,
     mount: null,
@@ -100,6 +102,7 @@ export type ScopeAction =
   | { type: 'removeSlide' }
   | { type: 'replaceSlide' }
   | { type: 'oil' }
+  | { type: 'phase' }
   | { type: 'cleanLens' }
   | { type: 'reset' }
 
@@ -167,6 +170,8 @@ export function scopeReducer(s: ScopeState, a: ScopeAction): ScopeState {
       return { ...s, slide: 'none', broken: false, oil: false }
     case 'oil':
       return s.slide === 'clipped' ? { ...s, oil: true } : s
+    case 'phase':
+      return { ...s, phase: !s.phase }
     case 'cleanLens':
       return { ...s, lensOily: false }
     case 'replaceSlide':
@@ -228,8 +233,12 @@ export function describeView(s: ScopeState): { tone: 'bad' | 'warn' | 'ok'; text
   if (o.glare > 0.18) return { tone: 'warn', text: 'Sharp but washed out. Close the iris diaphragm a little for more contrast.' }
   if (o.light > 1.05) return { tone: 'warn', text: 'Sharp but too bright to see detail. Turn the brightness down.' }
   if (o.light < 0.2) return { tone: 'warn', text: 'Sharp but dim. Turn the brightness up or open the iris.' }
-  return { tone: 'ok', text: 'Sharp and clear.' }
+  if (s.mount && UNSTAINED.has(s.mount.specimen) && !s.phase) return { tone: 'warn', text: 'In focus, but the living cells are almost invisible: they have no colour. Phase contrast makes them visible.' }
+  return { tone: 'ok', text: s.phase ? 'Phase contrast: the colourless cells now stand out, dark with bright edges.' : 'Sharp and clear.' }
 }
+
+// Colourless living specimens, nearly invisible in brightfield.
+const UNSTAINED = new Set<SpecimenId>(['pond'])
 
 export function inFocus(s: ScopeState, tolerance = 0.004) {
   return optics(s).blur <= tolerance

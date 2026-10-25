@@ -2,8 +2,9 @@
 import { InstrumentStation, useInstrument, type Action, type Instrument } from '../instruments/engine'
 import { CONFOCAL } from '../instruments/confocal/Confocal'
 import { TEM } from '../instruments/tem/Tem'
+import { SEM } from '../instruments/sem/Sem'
 
-const ALL = { confocal: CONFOCAL, tem: TEM } as unknown as Record<string, Instrument<Record<string, unknown>, Action>>
+const ALL = { confocal: CONFOCAL, tem: TEM, sem: SEM } as unknown as Record<string, Instrument<Record<string, unknown>, Action>>
 
 export function InstrumentLab() {
   const q = new URLSearchParams(location.hash.split('?')[1] ?? '')

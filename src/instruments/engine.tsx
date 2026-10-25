@@ -206,6 +206,17 @@ export function GuidedInstrument<S, A extends Action>({ inst, steps, label, init
     if (f.length) setSeen((old) => { const n = new Set(old); f.forEach((x) => n.add(x)); return n.size === old.size ? old : n })
   }, [state, inst])
   useEffect(() => { setSeen(new Set()) }, [index])
+  // Some flags depend on time passing (a slow scan finishing), so they are re-checked while waiting.
+  const stateRef = useRef(state)
+  stateRef.current = state
+  useEffect(() => {
+    if (!inst.flags) return
+    const id = window.setInterval(() => {
+      const f = inst.flags!(stateRef.current, stateRef.current)
+      if (f.length) setSeen((old) => { const n = new Set(old); f.forEach((x) => n.add(x)); return n.size === old.size ? old : n })
+    }, 250)
+    return () => clearInterval(id)
+  }, [inst, index])
 
   // Ticked checklist tasks stay ticked, even if a later task changes the state they checked.
   const [latched, setLatched] = useState<Set<number>>(() => new Set())

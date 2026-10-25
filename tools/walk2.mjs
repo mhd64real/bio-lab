@@ -13,7 +13,7 @@ const btn = (n) => page.getByRole('button', { name: n })
 const click = async (n) => { const b = btn(n).first(); if (await b.count() && await b.isEnabled()) { await b.click(); await page.waitForTimeout(120); return true } return false }
 const shot = (n) => page.screenshot({ path: `shots/p2-${n}.png` })
 const sub = async () => page.locator('header .text-sm').first().innerText()
-async function holdBtn(name, ms) { const b = btn(name).first(); const box = await b.boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up(); await page.waitForTimeout(80) }
+async function holdBtn(name, ms) { const b = btn(name).first(); await b.scrollIntoViewIfNeeded(); const box = await b.boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(ms); await page.mouse.up(); await page.waitForTimeout(80) }
 async function slider(label, v) { const el = page.locator('label', { hasText: label }).locator('input[type=range]'); await el.fill(String(Math.round(v * 100))); await page.waitForTimeout(80) }
 async function answer() {
   for (let i = 0; i < 6; i++) {

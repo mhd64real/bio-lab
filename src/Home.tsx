@@ -6,7 +6,7 @@ export const PHASES = [
   { id: 'p0', n: 0, title: 'Lab orientation', pages: 'Before the lesson', blurb: 'Learn the microscope, prepare a slide, meet the other instruments.', ready: true },
   { id: 'p1', n: 1, title: 'Cell structures', pages: 'Pages 55 to 56', blurb: 'Plant, animal and prokaryotic cells side by side.', ready: true },
   { id: 'p2', n: 2, title: 'Cytoskeleton and centrioles', pages: 'Pages 57 to 58', blurb: 'The framework inside the cell, live under fluorescence.', ready: true },
-  { id: 'p3', n: 3, title: 'Appendages and cell walls', pages: 'Pages 58 to 59', blurb: 'Beating cilia, whipping flagella and rigid walls.', ready: false },
+  { id: 'p3', n: 3, title: 'Appendages and cell walls', pages: 'Pages 58 to 59', blurb: 'Beating cilia, whipping flagella and rigid walls.', ready: true },
   { id: 'p4', n: 4, title: 'The nucleus', pages: 'Page 60', blurb: 'The control centre, sliced and seen with electrons.', ready: false },
   { id: 'p5', n: 5, title: 'Processing energy', pages: 'Page 61', blurb: 'Mitochondria and chloroplasts at work.', ready: false },
   { id: 'p6', n: 6, title: 'Manufacturing proteins', pages: 'Pages 62 to 63', blurb: 'Ribosomes, ER, Golgi and the vesicles they ship.', ready: false },

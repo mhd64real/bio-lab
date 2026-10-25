@@ -21,6 +21,8 @@ export interface ObserveStep {
   lock: (s: ScopeState) => Lock
   // Ordered actions shown as a checklist; when set, lock, highlight and done come from it.
   tasks?: Task[]
+  // The done condition must stay true this many seconds (e.g. keeping a swimming cell in view).
+  hold?: number
   // Done when the microscope reaches this state. Steps with a question are done when it is answered.
   done?: (s: ScopeState, seen: Set<string>) => boolean
   question?: ChoiceQ

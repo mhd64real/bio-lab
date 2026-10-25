@@ -50,7 +50,25 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
   }, [state])
   useEffect(() => { setSeen(new Set()) }, [index])
 
-  const reached = step.question ? answered : !!step.done?.(state, seen)
+  // Living specimens keep moving, so the guide re-checks a few times a second even when nothing is touched.
+  const [, tick] = useState(0)
+  const live = !!(mount && SPECIMENS[mount.specimen]?.animated)
+  useEffect(() => {
+    if (!live) return
+    const id = window.setInterval(() => tick((n) => n + 1), 200)
+    return () => clearInterval(id)
+  }, [live])
+  const doneNow = step.question ? answered : !!step.done?.(state, seen)
+  // Steps with a hold time must stay done that long; leaving the condition restarts the count.
+  const holdStart = useRef<number | null>(null)
+  const [heldDone, setHeldDone] = useState(false)
+  useEffect(() => { setHeldDone(false); holdStart.current = null }, [index])
+  let heldFor = 0
+  if (step.hold && !heldDone) {
+    if (doneNow) { holdStart.current ??= performance.now(); heldFor = (performance.now() - holdStart.current) / 1000 } else holdStart.current = null
+  }
+  useEffect(() => { if (step.hold && heldFor >= step.hold && !heldDone) setHeldDone(true) })
+  const reached = step.hold ? heldDone : doneNow
   const ready = !step.before || step.before(state, seen)
 
   const wasReached = useRef(false)
@@ -122,6 +140,12 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
                 ) : (
                   <p className="rounded-xl bg-[var(--color-sunk)] p-3 font-bold">{step.beforeText}</p>
                 )}
+              </div>
+            )}
+            {step.hold && !reached && (
+              <div className="mt-3">
+                <div className="mb-1 flex justify-between text-sm font-extrabold text-[var(--color-muted)]"><span>{doneNow ? 'In view' : 'Not in view'}</span><span className="tabular-nums">{heldFor.toFixed(1)} / {step.hold} s</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--color-sunk)]"><div className="h-full rounded-full bg-[var(--color-accent)]" style={{ width: `${Math.min(100, (heldFor / step.hold) * 100)}%` }} /></div>
               </div>
             )}
             {reached && !step.question && (

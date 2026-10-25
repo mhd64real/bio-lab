@@ -109,6 +109,11 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
         <button type="button" disabled={!can('lamp')} className={`ctl-btn w-full justify-center ${state.lampOn ? 'ctl-on' : ''} ${hl('power') ? 'attention' : ''}`} onClick={api.lamp} aria-pressed={state.lampOn}>
           <Power size={20} /> {state.lampOn ? 'Lamp on' : 'Lamp off'} <span className="kbd ml-1">L</span>
         </button>
+        {(can('phase') || state.phase || lock.allow === 'all') && (
+          <button type="button" disabled={!can('phase')} className={`ctl-btn mt-2 w-full justify-center ${state.phase ? 'ctl-on' : ''} ${hl('condenser') ? 'attention' : ''}`} onClick={api.phase} aria-pressed={state.phase}>
+            Condenser: {state.phase ? 'Phase contrast' : 'Brightfield'}
+          </button>
+        )}
         <div className="mt-2 grid gap-1">
           <Slider label="Brightness" value={state.brightness} onChange={api.brightness} colour="var(--color-accent)" attention={hl('brightness')} disabled={!can('brightness')} />
           <Slider label="Iris diaphragm" value={state.iris} onChange={api.iris} colour="var(--color-accent)" attention={hl('iris')} disabled={!can('iris')} />

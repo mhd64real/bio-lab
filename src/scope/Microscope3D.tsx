@@ -38,6 +38,7 @@ export interface ScopeHandlers {
   stageTap(): void
   clip(): void
   oil(): void
+  phase(): void
   cleanLens(): void
 }
 

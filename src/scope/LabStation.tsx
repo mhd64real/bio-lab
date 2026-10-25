@@ -39,6 +39,7 @@ function useGuardedApi(api: ScopeApi, lock: Lock, deny: () => void): ScopeApi {
       clip: g('clip', api.clip),
       remove: g('remove', api.remove),
       oil: g('oil', api.oil),
+      phase: g('phase', api.phase),
       cleanLens: g('clean', api.cleanLens),
       objective: (o) => (canObjective(lock, o) ? api.objective(o) : deny()),
     }

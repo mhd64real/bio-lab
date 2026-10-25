@@ -11,6 +11,8 @@ export interface SpecimenDef {
   textureSize?: number
   // Height (um) of the second plane t1 above the main plane. Omit for single-plane specimens.
   layerZ?: number
+  // Living specimens move, so they are redrawn continuously (they use uTime, seconds).
+  animated?: boolean
 }
 
 const LETTER_TEX_MM = 4
@@ -311,8 +313,12 @@ export const EMPTY: SpecimenDef = {
   body: 't0 = vec3(0.99);',
 }
 
+import { ELODEA, POND } from './specimensLive'
+
 export const SPECIMENS: Record<string, SpecimenDef> = {
   'letter-e': LETTER_E,
+  pond: POND,
+  elodea: ELODEA,
   onion: ONION,
   cheek: CHEEK,
   yogurt: YOGURT,
