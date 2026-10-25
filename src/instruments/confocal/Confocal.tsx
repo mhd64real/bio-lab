@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Droplet, Play, Power, Square, Thermometer, Timer } from 'lucide-react'
 import { ShaderView } from '../ShaderView'
 import type { CtlProps, Instrument } from '../engine'
-import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
+import { Group, HoldButton, Slider, steady } from '../../scope/Controls'
 import { CONFOCAL_POST, CONFOCAL_SPECIMEN } from './shaders'
 import {
   bleach, confocalReducer, confocalTick, describeConfocal, fov, gainFactor, initialConfocal, LASER_INFO, LASERS, photons, section, timelapseSpeed, clocked,
@@ -49,7 +49,13 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
 }
 
 function ConfocalControls({ state: s, act, can, hl }: CtlProps<ConfocalState, ConfocalAction>) {
-  const focus = (dir: number) => (dt: number, held: number) => act({ type: 'focus', dz: dir * (0.6 + (s.objective === 63 ? 6 : 25) * ramp(held, 2)) * dt })
+  // Focus: a tap nudges; holding moves steadily, shifting once to a quicker gear after 1.5 s for long trips
+  // (no smooth speeding up, which makes people overshoot).
+  const focus = (dir: number) => (dt: number, held: number) => {
+    const slow = s.objective === 63 ? 2.5 : 10
+    const v = steady(slow * 0.08, held > 1.5 ? slow * 3 : slow, dt, held)
+    if (v) act({ type: 'focus', dz: dir * v })
+  }
   return (
     <div className="ctl-pad">
       <Group title="Lasers" attention={hl('power', 'laser')} locked={!can('power') && !can('laser')}>

@@ -32,5 +32,11 @@ export interface ObserveStep {
   // A bench action done in the guide card while the slide stays on the stage. It records the flag 'acted';
   // `mount` (optional) changes what is under the coverslip.
   act?: { label: string; mount?: (m: Mount) => Mount }
+  // 'stage': show the stage seen from the side instead of the eyepiece (lining up before focusing).
+  view?: 'stage'
+  // Once the specimen is within this many mm of the centre and the student stops moving, it slides into place.
+  snap?: number
+  // A centre mark in the eyepiece to aim at.
+  reticle?: boolean
 }
 

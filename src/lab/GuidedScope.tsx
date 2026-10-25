@@ -58,6 +58,29 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
     const id = window.setInterval(() => tick((n) => n + 1), 200)
     return () => clearInterval(id)
   }, [live])
+  // Snap: once the specimen is close to the centre and the student pauses, it glides the last bit into place.
+  const stageRef = useRef(state)
+  stageRef.current = state
+  const gliding = useRef(0)
+  useEffect(() => () => cancelAnimationFrame(gliding.current), [])
+  useEffect(() => {
+    if (!step.snap || state.slide !== 'clipped' || gliding.current) return
+    const d = Math.hypot(state.stageX, state.stageY)
+    if (d > step.snap || d < 1e-4) return
+    const id = window.setTimeout(() => {
+      const t0 = performance.now()
+      const glide = (now: number) => {
+        const s = stageRef.current
+        const done = now - t0 >= 220
+        // A share of the remaining distance each frame, finishing exactly on the centre.
+        api.stage(-s.stageX * (done ? 1 : 0.25), -s.stageY * (done ? 1 : 0.25))
+        if (done) { gliding.current = 0; play('clip') } else gliding.current = requestAnimationFrame(glide)
+      }
+      gliding.current = requestAnimationFrame(glide)
+    }, 240)
+    return () => clearTimeout(id)
+  }, [step.snap, state.stageX, state.stageY, state.slide, api])
+
   const doneNow = step.question ? answered : !!step.done?.(state, seen)
   // Steps with a hold time must stay done that long; leaving the condition restarts the count.
   const holdStart = useRef<number | null>(null)
@@ -177,6 +200,8 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
       highlight={crashed ? ['coarse'] : step.tasks ? (currentTask(step.tasks, state)?.highlight ?? []) : step.highlight}
       lock={crashed ? { allow: ['coarse'] } : step.lock(state)}
       holdingSlide={state.slide === 'none'}
+      stageView={!crashed && step.view === 'stage'}
+      reticle={!crashed && !!step.reticle}
     />
   )
 }

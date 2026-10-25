@@ -202,8 +202,12 @@ button:disabled { cursor: default; }
 /* Scrolling panels clip whatever pokes outside them, so they get a margin of empty space (padding, cancelled
    by a negative margin) wide enough for the attention pulse around a highlighted card. */
 .glow-room { padding: 14px; margin: -14px; }
-.station-guide-card { min-height: 0; max-height: calc(58vh + 28px); overflow: auto; padding: 14px; margin: -14px; }
-.station-controls { min-height: 0; overflow: auto; padding: 14px; margin: -14px; }
+.station-guide-card { min-height: 0; max-height: 58vh; overflow: auto; border-radius: var(--radius-card); }
+.station-controls { min-height: 0; overflow-x: hidden; overflow-y: auto; border-radius: var(--radius-card); }
+/* Stations scroll their guide and controls inside wrappers that are not cards themselves, so those wrappers
+   get the glow room (the prep page's step card also uses .station-guide-card and must keep its own padding). */
+.station-guide-card.glow-room { max-height: calc(58vh + 28px); border-radius: 0; }
+.station-controls.glow-room { border-radius: 0; }
 .station-view { grid-area: view; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 0.6rem; }
 .station-side { grid-area: side; min-height: 0; display: grid; }
 .station-scope { background: linear-gradient(#fbfcfe, #eef3f8); border: 1px solid var(--color-line); border-radius: var(--radius-card); overflow: hidden; position: relative; min-height: 0; }
@@ -445,3 +449,8 @@ button:disabled { cursor: default; }
   body { background: #fff; }
   .result-card { box-shadow: none; border: 1px solid #ccc; }
 }
+
+/* Focus buttons sit three across with the focus guide; on a narrow panel they shrink and drop the key hints. */
+.ctl-focus { container-type: inline-size; }
+.ctl-focus .ctl-btn { min-width: 0; padding: 0 0.6rem; }
+@container (max-width: 330px) { .ctl-focus .kbd { display: none; } }

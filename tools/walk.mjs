@@ -1,5 +1,6 @@
 // Walks through Phase 0 "observe" with real inputs and screenshots key moments.
 import { chromium } from 'playwright'
+import { focusSteady } from './lib/focus.mjs'
 
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] })
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
@@ -15,13 +16,7 @@ const hold = async (key, ms) => { await page.keyboard.down(key); await page.wait
 const shot = (n) => page.screenshot({ path: `shots/walk-${n}.png` })
 const log = async (msg) => { const s = await S(); console.log(msg.padEnd(28), '|', await title(), '| z', s.stageZ.toFixed(1), 'x', s.stageX.toFixed(2), 'y', s.stageY.toFixed(2), 'obj', s.objective) }
 
-async function focusTo(target, key = ']', keyDown = '[', tol = 1) {
-  for (let i = 0; i < 80; i++) {
-    const s = await S(); const d = target - s.stageZ
-    if (Math.abs(d) <= tol) return
-    await hold(d > 0 ? key : keyDown, Math.min(1500, Math.max(30, Math.abs(d) * (key === ']' ? 12 : 0.15))))
-  }
-}
+async function focusTo(target, key = ']', keyDown = '[', tol = 1) { return focusSteady(S, hold, target, key, keyDown, tol) }
 async function centreTo(tx, ty, tol) {
   for (let i = 0; i < 60; i++) {
     const s = await S(); const dx = tx - s.stageX, dy = ty - s.stageY

@@ -36,7 +36,7 @@ export function Phase2() {
       <TopBar
         title="Phase 2: Cytoskeleton and centrioles"
         sub={section === 'done' ? NAMES.done : `${NAMES[section]} (${index + 1} of ${SECTIONS.length - 1})`}
-        right={section !== 'intro' && section !== 'done' ? (
+        right={section !== 'intro' ? (
           <button type="button" className="icon-btn" onClick={() => { if (confirm('Restart Phase 2 from the beginning?')) restart() }}>
             <RotateCcw size={18} /><span className="hidden md:inline">Restart</span>
           </button>

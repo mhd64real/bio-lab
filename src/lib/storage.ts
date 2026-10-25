@@ -47,9 +47,13 @@ export const progress = {
     save()
   },
   setStudent(student: { name: string; group: string }) { current = { ...current, student }; save() },
+  // Starting a phase again clears where the student was and what they made, but keeps the fact that it was
+  // finished (and its last score), so the phases after it stay open.
   resetPhase(id: string) {
+    const old = current.phases[id]
     const phases = { ...current.phases }
-    delete phases[id]
+    if (old?.done) phases[id] = { done: true, score: old.score }
+    else delete phases[id]
     current = { ...current, phases }
     save()
   },

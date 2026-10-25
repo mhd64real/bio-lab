@@ -61,8 +61,9 @@ export function Hot({ id, children, ring }: { id: string | string[]; children: R
       onPointerUp={hold ? c.holdEnd : undefined}
       onPointerCancel={hold ? c.holdEnd : undefined}
     >
-      {on && !c.busy && ring && <circle cx={ring.cx} cy={ring.cy} r={ring.r} className="hot-ring" />}
       {children}
+      {/* Drawn over the object, so a large object (a slide, a dish) never hides its own ring. */}
+      {on && !c.busy && ring && <circle cx={ring.cx} cy={ring.cy} r={ring.r} className="hot-ring" />}
     </g>
   )
 }

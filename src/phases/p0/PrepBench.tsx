@@ -155,7 +155,8 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
             {stage === 'place' && <rect x="-6" y="-6" width="392" height="132" rx="10" fill="none" stroke="#f2a516" strokeWidth="4" strokeDasharray="10 7" />}
             {paperOnSlide && (
               <g>
-                {water && <ellipse cx="205" cy="60" rx={stage === 'result' ? 62 : 34} ry={stage === 'result' ? 46 : 26} fill="rgba(120,190,235,0.35)" />}
+                {/* The water spreads out under the coverslip as it is lowered. */}
+                {water && <ellipse cx="205" cy="60" rx={stage === 'result' ? 62 : 34 + 28 * (1 - angle / 45)} ry={stage === 'result' ? 46 : 26 + 20 * (1 - angle / 45)} fill="rgba(120,190,235,0.35)" />}
                 <rect x="190" y="45" width="30" height="30" fill="#dcdcd6" stroke="#b9b9b2" />
                 <text x="205" y="67" textAnchor="middle" fontFamily="Georgia, serif" fontSize="22" fill="#1c1c1c">e</text>
                 {water && stage !== 'result' && <ellipse cx="205" cy="58" rx="26" ry="18" fill="rgba(140,205,245,0.45)" stroke="rgba(80,150,200,0.6)" />}
@@ -181,8 +182,8 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
             onClick={squeeze}
             className={stage === 'drop' ? 'cursor-pointer' : ''}
           >
-            {stage === 'drop' && dropT === null && <circle cx="0" cy="0" r="72" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" />}
             <Sprite src="shared/dropper" x={0} y={0} w={24} h={132} rot={stage === 'drop' ? 0 : 8} />
+            {stage === 'drop' && dropT === null && <circle cx="0" cy="0" r="72" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" pointerEvents="none" />}
             {/* The drop hangs at the tip, then falls onto the paper on the slide. */}
             {dropT !== null && fall < 1 && <ellipse cx="0" cy={68 + fall * 66} rx={3 + 2 * Math.min(1, dropT * 4)} ry={4 + 3 * Math.min(1, dropT * 4)} fill="rgba(140,205,245,0.9)" stroke="rgba(70,140,190,0.7)" />}
           </g>

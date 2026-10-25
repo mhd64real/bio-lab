@@ -1,4 +1,5 @@
 // Shared drawing pieces for the slide-prep bench scenes (SVG, 820 x 480 viewBox).
+import { PillLabel } from '../../lab/artKit'
 import type { ReactNode } from 'react'
 import type { Bubble } from '../../scope/model'
 
@@ -68,6 +69,14 @@ export function BlotPaper({ x, y, stain }: { x: number; y: number; stain?: strin
   )
 }
 
+// The drop under a coverslip tilted up by `angle` degrees (45 = raised, 0 = down), side view.
+const dropPath = (angle: number) => {
+  const down = 1 - Math.min(45, Math.max(0, angle)) / 45
+  const w = 40 + 70 * down * down // half-width: spreads out under the glass
+  const h = 11 - 9.5 * down // height of the bead: squashed to a thin film
+  return `M${-w} 20 q${w} ${-2 * h} ${2 * w} 0 Z`
+}
+
 // Side view inset used while lowering the coverslip.
 export function CoverInset({ x, y, angle, liquid }: { x: number; y: number; angle: number; liquid: string }) {
   return (
@@ -75,13 +84,14 @@ export function CoverInset({ x, y, angle, liquid }: { x: number; y: number; angl
       <circle r="120" fill="#fff" stroke="#d6dee8" strokeWidth="3" filter="url(#sh)" />
       <g clipPath="url(#insetClip)">
         <rect x="-140" y="20" width="280" height="24" fill="url(#glass)" stroke="#9cc3d8" />
-        <path d={`M-40 20 q40 ${-14 + angle * 0.1} 80 0 Z`} fill={liquid} />
+        {/* The drop: a tall bead while the coverslip is raised, squashed flat and spread wide as it comes down. */}
+        <path d={dropPath(angle)} fill={liquid} />
         <g transform={`translate(-55 18) rotate(${-angle})`}>
           <rect x="0" y="-3" width="120" height="5" rx="1.5" fill="rgba(214,236,247,0.95)" stroke="#7fb0cc" strokeWidth="1.5" />
         </g>
         <path d="M-55 18 l-20 -40" stroke="#5a6779" strokeWidth="4" strokeLinecap="round" />
       </g>
-      <text y="-92" textAnchor="middle" fontSize="13" fontWeight="900" fill="#5a6779">side view</text>
+      <PillLabel y={-92} size={13}>side view</PillLabel>
     </g>
   )
 }

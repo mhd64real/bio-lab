@@ -44,7 +44,7 @@ export function Phase4() {
       <TopBar
         title="Phase 4: The nucleus"
         sub={section === 'done' ? NAMES.done : `${NAMES[section]} (${index + 1} of ${COUNTED})`}
-        right={section !== 'intro' && section !== 'done' ? (
+        right={section !== 'intro' ? (
           <button type="button" className="icon-btn" onClick={() => { if (confirm('Restart Phase 4 from the beginning?')) restart() }}>
             <RotateCcw size={18} /><span className="hidden md:inline">Restart</span>
           </button>

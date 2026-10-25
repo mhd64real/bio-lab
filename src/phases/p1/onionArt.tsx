@@ -2,8 +2,7 @@
 // Liquids, the peel, the coverslip and the slide glass stay drawn in code so they can move continuously.
 import { Hot, type SceneProps } from '../../lab/PrepRunner'
 import { Caption, CoverInset, mix } from './sceneKit'
-import { ArtStage, BlotSprite, Inset, PhotoSlide, Sprite as KitSprite } from '../../lab/artKit'
-import { useEffect, useRef } from 'react'
+import { ArtStage, BlotSprite, PhotoSlide, Sprite as KitSprite, VideoInset } from '../../lab/artKit'
 
 const WATER: [number, number, number] = [150, 205, 240]
 const IODINE: [number, number, number] = [205, 145, 35]
@@ -13,24 +12,6 @@ const SH = (name: string) => `shared/${name}`
 function Sprite(p: { name: string; x: number; y: number; w: number; h: number; rot?: number }) {
   const { name, ...rest } = p
   return <KitSprite src={['forceps', 'dropper'].includes(name) ? SH(name) : ON(name)} {...rest} />
-}
-
-// Generated video of the epidermis being peeled (gloved hands only), scrubbed by the student's drag.
-function PeelInset({ p }: { p: number }) {
-  const ref = useRef<HTMLVideoElement>(null)
-  useEffect(() => {
-    const v = ref.current
-    if (!v) return
-    const seek = () => { v.currentTime = 0.6 + p * 8.6 }
-    if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true })
-  }, [p])
-  return (
-    <Inset x={560} y={170} caption="So thin you can see through it">
-      <foreignObject x="-120" y="-120" width="240" height="240">
-        <video ref={ref} src={`${import.meta.env.BASE_URL}art/video/onion-peel.mp4`} muted playsInline preload="auto" style={{ width: 240, height: 240, objectFit: 'cover', display: 'block' }} />
-      </foreignObject>
-    </Inset>
-  )
 }
 
 export function OnionArtScene({ flags, active, progress, angle, bubbles }: SceneProps) {
@@ -92,7 +73,7 @@ export function OnionArtScene({ flags, active, progress, angle, bubbles }: Scene
         </g>
       )}
 
-      {(active === 'peel' || (has('peel') && !has('lay'))) && <PeelInset p={has('peel') ? 1 : progress} />}
+      {(active === 'peel' || (has('peel') && !has('lay'))) && <VideoInset name="onion-peel" p={has('peel') ? 1 : progress} from={0.6} to={9.2} caption="So thin you can see through it" />}
       {active === 'cover' && <CoverInset x={560} y={170} angle={angle} liquid={liquid} />}
       {active === 'cut' && <Caption x={200} y={140}>A whole onion bulb</Caption>}
       {active === 'piece' && <Caption x={208} y={140}>Each ring is a fleshy scale leaf</Caption>}

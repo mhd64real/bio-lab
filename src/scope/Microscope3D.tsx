@@ -2,7 +2,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls, RoundedBox } from '@react-three/drei'
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
-import { OBJECTIVES, STAGE_MAX, type Objective, type ScopeState } from './model'
+import { OBJECTIVES, OBJECTIVE_INFO, STAGE_MAX, type Objective, type ScopeState } from './model'
 
 export type PartId =
   | 'eyepiece' | 'head' | 'arm' | 'nosepiece' | 'objectives' | 'stage' | 'clips' | 'stageKnobs'
@@ -215,11 +215,14 @@ function Stage() {
     for (const c of [clipL.current, clipR.current]) if (c) c.rotation.x += (-clipA - c.rotation.x) * k
     if (lever.current) lever.current.rotation.y = -0.9 + state.iris * 1.8
   })
+  // Dragging the slide or the stage knobs: a fixed fraction of the field of view per pixel, so the image moves
+  // at the same gentle pace at every magnification (4x: about 0.025 mm per pixel).
+  const knobGain = OBJECTIVE_INFO[state.objective].fov * 0.0055
   const stageDrag = useDrag(
-    (dx, dy) => on.stage(dx * 0.03, -dy * 0.03),
+    (dx, dy) => on.stage(dx * knobGain, -dy * knobGain),
     () => (state.slide === 'none' ? on.stageTap() : state.slide === 'loose' ? on.clip() : undefined),
   )
-  const knobDrag = useDrag((dx, dy) => on.stage(dx * 0.03, -dy * 0.03))
+  const knobDrag = useDrag((dx, dy) => on.stage(dx * knobGain, -dy * knobGain))
   const irisDrag = useDrag((dx) => on.iris(state.iris + dx * 0.006))
   return (
     <group ref={g} position={[0, stageY(state.stageZ), 0]}>

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, DoorOpen, Minus, Plus, Wind, Zap } from 'lucide-react'
 import { ShaderView } from '../ShaderView'
 import type { CtlProps, Instrument } from '../engine'
-import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
+import { Group, HoldButton, Slider, stageStep, steady } from '../../scope/Controls'
 import { SEM_POST, SEM_SPECIMEN } from './shaders'
-import { describeSem, initialSem, SEM_MAGS, semBlur, semFov, semReducer, semTick, type SemAction, type SemState } from './model'
+import { describeSem, initialSem, SEM_MAGS, semBlur, semFocusOk, semFov, semReducer, semTick, type SemAction, type SemState } from './model'
 
 const SLOW_FRAME = 4 // seconds per slow-scan frame
 
@@ -51,8 +51,9 @@ function SemView({ state: s }: { state: SemState }) {
 
 function SemControls({ state: s, act, can, hl }: CtlProps<SemState, SemAction>) {
   const f = semFov(s)
-  const focus = (dir: number) => (dt: number, held: number) => act({ type: 'focus', dz: dir * (40 + 900 * ramp(held, 2)) * dt })
-  const move = (dx: number, dy: number) => (dt: number, held: number) => { const v = f * (0.25 + ramp(held, 1.5)) * dt; act({ type: 'stage', dx: dx * v, dy: dy * v }) }
+  const focus = (dir: number) => (dt: number, held: number) => { const v = steady(f * 0.6, f * 6, dt, held); if (v) act({ type: 'focus', dz: dir * v }) }
+  const towards = hl('focus') && can('focus') && !semFocusOk(s) ? (s.focus > 0 ? 'down' : 'up') : null
+  const move = (dx: number, dy: number) => (dt: number, held: number) => { const v = stageStep(f, dt, held); if (v) act({ type: 'stage', dx: dx * v, dy: dy * v }) }
   const status = { vacuum: 'Chamber at high vacuum', venting: `Letting air in ${Math.round(s.progress * 100)}%`, vented: s.door ? 'Chamber open' : 'Chamber at air pressure, door closed', pumping: `Pumping ${Math.round(s.progress * 100)}%` }[s.chamber]
   return (
     <div className="ctl-pad">
@@ -88,8 +89,8 @@ function SemControls({ state: s, act, can, hl }: CtlProps<SemState, SemAction>) 
           <button type="button" aria-label="Higher magnification" disabled={!can('mag') || s.mag === SEM_MAGS.length - 1} className="ctl-btn justify-center px-3" onClick={() => act({ type: 'mag', to: s.mag + 1 })}><Plus size={18} /></button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <HoldButton step={focus(1)} label="Focus up" disabled={!can('focus')} className="ctl-fine"><ChevronUp size={20} />Focus</HoldButton>
-          <HoldButton step={focus(-1)} label="Focus down" disabled={!can('focus')} className="ctl-fine"><ChevronDown size={20} />Focus</HoldButton>
+          <HoldButton step={focus(1)} label="Focus up" disabled={!can('focus')} className={`ctl-fine ${towards === 'up' ? 'attention' : ''}`}><ChevronUp size={20} />Focus</HoldButton>
+          <HoldButton step={focus(-1)} label="Focus down" disabled={!can('focus')} className={`ctl-fine ${towards === 'down' ? 'attention' : ''}`}><ChevronDown size={20} />Focus</HoldButton>
         </div>
       </Group>
 

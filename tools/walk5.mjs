@@ -1,5 +1,6 @@
 // Drives Phase 5 end to end with real inputs. Usage: node tools/walk5.mjs [fromSection]
 import { chromium } from 'playwright'
+import { focusSteady } from './lib/focus.mjs'
 const from = process.argv[2] ?? 'intro'
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] })
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
@@ -42,7 +43,7 @@ async function prep(tag) {
 // ---------- light microscope ----------
 const SC = () => page.evaluate(() => window.__scope)
 const FOCUS = { 4: 15000, 10: 15006, 40: 14997.5, 100: 15001.5 }
-async function focusTo(target, up, down, tol, k) { for (let i = 0; i < 120; i++) { const d = target - (await SC()).stageZ; if (Math.abs(d) <= tol) return; await hold(d > 0 ? up : down, Math.min(1500, Math.max(25, Math.abs(d) * k))) } }
+async function focusTo(target, up, down, tol) { return focusSteady(SC, hold, target, up, down, tol) }
 async function stageTo(tx, ty, tol) {
   for (let i = 0; i < 80; i++) {
     const s = await SC(); const fov = { 4: 4.5, 10: 1.8, 40: 0.45 }[s.objective]

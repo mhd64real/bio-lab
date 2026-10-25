@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Minus, Palette, Plus, Power, Zap } from 'lucide-react'
 import { ShaderView } from '../ShaderView'
 import type { CtlProps, Instrument } from '../engine'
-import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
+import { Group, HoldButton, Slider, stageStep, steady } from '../../scope/Controls'
 import { TEM_POST, TEM_SPECIMEN } from './shaders'
-import { defocusBlur, describeTem, imageBrightness, initialTem, MAGS, magOf, scaleBar, temFov, temReducer, temTick, type TemAction, type TemState } from './model'
+import { defocusBlur, describeTem, focusOk, imageBrightness, initialTem, MAGS, magOf, scaleBar, temFov, temReducer, temTick, type TemAction, type TemState } from './model'
 
 function TemView({ state: s }: { state: TemState }) {
   const sb = scaleBar(s)
@@ -39,8 +39,11 @@ function TemView({ state: s }: { state: TemState }) {
 
 function TemControls({ state: s, act, can, hl }: CtlProps<TemState, TemAction>) {
   const f = temFov(s)
-  const focus = (dir: number) => (dt: number, held: number) => act({ type: 'focus', dz: dir * f * (800 + 6000 * ramp(held, 2)) * dt })
-  const move = (dx: number, dy: number) => (dt: number, held: number) => { const v = f * (0.25 + ramp(held, 1.5)) * dt; act({ type: 'stage', dx: dx * v, dy: dy * v }) }
+  // Focus: a tap nudges, holding moves steadily; both scale with the field so focusing feels the same at every magnification.
+  const focus = (dir: number) => (dt: number, held: number) => { const v = steady(f * 15, f * 160, dt, held); if (v) act({ type: 'focus', dz: dir * v }) }
+  // During a focus step, the button that brings the image towards focus glows.
+  const towards = hl('focus') && can('focus') && !focusOk(s) ? (s.defocus > 0 ? 'down' : 'up') : null
+  const move = (dx: number, dy: number) => (dt: number, held: number) => { const v = stageStep(f, dt, held); if (v) act({ type: 'stage', dx: dx * v, dy: dy * v }) }
   const holderLabel = { out: 'Holder empty', loaded: 'Grid loaded in the holder', airlock: s.airlock >= 1 ? 'Airlock at vacuum' : s.airlock > 0 ? `Pumping airlock ${Math.round(s.airlock * 100)}%` : 'Holder in the airlock (air)', in: 'Holder in the column' }[s.holder]
   return (
     <div className="ctl-pad">
@@ -75,8 +78,8 @@ function TemControls({ state: s, act, can, hl }: CtlProps<TemState, TemAction>) 
           <button type="button" aria-label="Higher magnification" disabled={!can('mag') || s.mag === MAGS.length - 1} className="ctl-btn justify-center px-3" onClick={() => act({ type: 'mag', to: s.mag + 1 })}><Plus size={18} /></button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <HoldButton step={focus(1)} label="Focus up" disabled={!can('focus')} className="ctl-fine"><ChevronUp size={20} />Focus</HoldButton>
-          <HoldButton step={focus(-1)} label="Focus down" disabled={!can('focus')} className="ctl-fine"><ChevronDown size={20} />Focus</HoldButton>
+          <HoldButton step={focus(1)} label="Focus up" disabled={!can('focus')} className={`ctl-fine ${towards === 'up' ? 'attention' : ''}`}><ChevronUp size={20} />Focus</HoldButton>
+          <HoldButton step={focus(-1)} label="Focus down" disabled={!can('focus')} className={`ctl-fine ${towards === 'down' ? 'attention' : ''}`}><ChevronDown size={20} />Focus</HoldButton>
         </div>
       </Group>
 

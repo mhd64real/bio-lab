@@ -47,7 +47,7 @@ export function Phase3() {
       <TopBar
         title="Phase 3: Appendages and cell walls"
         sub={current === 'done' || current === 'practice' ? NAMES[current] : `${NAMES[current]} (${index + 1} of ${COUNTED})`}
-        right={current !== 'intro' && current !== 'done' && current !== 'practice' ? (
+        right={current !== 'intro' ? (
           <button type="button" className="icon-btn" onClick={() => { if (confirm('Restart Phase 3 from the beginning?')) restart() }}>
             <RotateCcw size={18} /><span className="hidden md:inline">Restart</span>
           </button>

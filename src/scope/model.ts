@@ -165,7 +165,7 @@ export function scopeReducer(s: ScopeState, a: ScopeAction): ScopeState {
     case 'placeSlide':
       if (s.slide !== 'none') return s
       // A slide is never placed perfectly centred.
-      return { ...s, slide: 'loose', mount: a.mount, broken: false, stageX: 1.6, stageY: -1.1 }
+      return { ...s, slide: 'loose', mount: a.mount, broken: false, stageX: 5.2, stageY: -3.4 }
     case 'clip':
       return s.slide === 'loose' ? { ...s, slide: 'clipped' } : s
     case 'removeSlide':

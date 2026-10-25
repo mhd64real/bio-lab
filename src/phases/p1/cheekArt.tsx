@@ -1,7 +1,6 @@
 // The cheek-cell bench from generated photo sprites (public/art/cheek, public/art/shared).
-import { useEffect, useRef } from 'react'
 import { Hot, type SceneProps } from '../../lab/PrepRunner'
-import { art, ArtStage, BlotSprite, Drip, Inset, PhotoSlide, Sprite } from '../../lab/artKit'
+import { art, ArtStage, BlotSprite, Drip, PhotoSlide, Sprite, VideoInset } from '../../lab/artKit'
 import { CoverInset, mix } from './sceneKit'
 
 const WATER: [number, number, number] = [150, 205, 240]
@@ -17,25 +16,6 @@ function SwabWithCells({ x, y, rot, cells }: { x: number; y: number; rot: number
         <circle key={i} cx={-5 + (i * 5) % 11} cy={-82 + ((i * 7) % 12)} r="1.8" fill="rgba(240,226,210,0.95)" stroke="rgba(190,170,150,0.8)" strokeWidth="0.5" />
       ))}
     </g>
-  )
-}
-
-// Generated video (lower face only), scrubbed by the student's drag instead of playing on its own,
-// so the swab moves exactly as far as they drag it.
-function ScrapeInset({ p }: { p: number }) {
-  const ref = useRef<HTMLVideoElement>(null)
-  useEffect(() => {
-    const v = ref.current
-    if (!v) return
-    const seek = () => { v.currentTime = 1.2 + p * 7.3 }
-    if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true })
-  }, [p])
-  return (
-    <Inset x={560} y={170} caption="Rub the swab on the inside of the cheek" bg="#e9edf1">
-      <foreignObject x="-120" y="-120" width="240" height="240">
-        <video ref={ref} src={`${import.meta.env.BASE_URL}art/video/cheek-swab.mp4`} muted playsInline preload="auto" style={{ width: 240, height: 240, objectFit: 'cover', display: 'block' }} />
-      </foreignObject>
-    </Inset>
   )
 }
 
@@ -78,7 +58,7 @@ export function CheekArtScene({ flags, active, progress, angle, bubbles }: Scene
           <Drip x={634} y0={364} y1={392} t={Math.min(1, progress * 3)} colour="rgba(55,100,200,0.9)" />
         </g>
       )}
-      {active === 'scrape' && <ScrapeInset p={progress} />}
+      {active === 'scrape' && <VideoInset name="cheek-swab" p={progress} from={1.2} to={8.5} caption="Rub the swab on the inside of the cheek" />}
       {active === 'cover' && <CoverInset x={560} y={170} angle={angle} liquid={liquid} />}
     </ArtStage>
   )

@@ -38,9 +38,9 @@ export const kit = {
     id: 'clip', title: 'Clip it in', body: 'Tap the stage clips to hold the slide still.',
     highlight: ['clips'], lock: () => ({ allow: ['clip'] }), done: (s) => s.slide === 'clipped',
   }),
-  centre: (body = 'Use the stage controls to move the slide until the specimen sits over the light hole.'): ObserveStep => ({
+  centre: (body = 'Look at the stage from the side. Drag the slide, or use the stage controls, until the specimen sits over the light hole. The ring turns green when it is in place.'): ObserveStep => ({
     id: 'centre', title: 'Line up the specimen', body,
-    highlight: ['stageKnobs'], lock: () => ({ allow: ['stage'] }), done: (s) => centred(s, 0.7),
+    highlight: ['stageKnobs'], lock: () => ({ allow: ['stage'] }), done: (s) => centred(s, 0.7), view: 'stage', snap: 1.4,
   }),
   coarse: (body = 'Raise the stage with the coarse focus knob until the specimen appears in the eyepiece.'): ObserveStep => ({
     id: 'coarse', title: 'Find it with coarse focus', body,

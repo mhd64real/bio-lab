@@ -1,5 +1,6 @@
 // Drives the whole of Phase 1 with real inputs. Usage: node tools/walk1.mjs [fromSection]
 import { chromium } from 'playwright'
+import { focusSteady } from './lib/focus.mjs'
 
 const from = process.argv[2] ?? 'intro'
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] })
@@ -53,13 +54,7 @@ async function prep(label) {
   throw new Error('prep stuck: ' + label)
 }
 
-async function focusTo(target, up, down, tol, k) {
-  for (let i = 0; i < 120; i++) {
-    const d = target - (await S()).stageZ
-    if (Math.abs(d) <= tol) return
-    await hold(d > 0 ? up : down, Math.min(1500, Math.max(25, Math.abs(d) * k)))
-  }
-}
+async function focusTo(target, up, down, tol) { return focusSteady(S, hold, target, up, down, tol) }
 async function centre(tol) {
   for (let i = 0; i < 80; i++) {
     const s = await S()

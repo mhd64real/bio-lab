@@ -84,7 +84,7 @@ export function Phase0() {
       <TopBar
         title="Phase 0: Lab orientation"
         sub={current === 'practice' ? NAMES[current] : `${NAMES[current]} (${Math.min(index + 1, 6)} of 6)`}
-        right={current !== 'welcome' && current !== 'done' && current !== 'practice' ? (
+        right={current !== 'welcome' ? (
           <button type="button" className="icon-btn" onClick={() => { if (confirm('Restart the orientation from the beginning?')) { progress.resetPhase('p0'); setMount(null); go('welcome') } }}>
             <RotateCcw size={18} /><span className="hidden md:inline">Restart</span>
           </button>

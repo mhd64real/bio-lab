@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { Lock as LockIcon } from 'lucide-react'
 import { Eye, Tags } from 'lucide-react'
 import { OpticalView } from './OpticalView'
+import { StageView } from './StageView'
 import { Microscope3D, type PartId } from './Microscope3D'
 import { Controls, useScopeKeys } from './Controls'
 import { describeView, OBJECTIVE_INFO, type ScopeState } from './model'
@@ -20,6 +21,10 @@ export interface LabStationProps {
   showView?: boolean
   lock?: Lock
   lockedMessage?: string
+  // Show the stage from the side instead of the eyepiece (lining up the specimen by eye).
+  stageView?: boolean
+  // A centre cross over the eyepiece view.
+  reticle?: boolean
 }
 
 // Wraps the microscope so locked controls do nothing, wherever they are touched: buttons, 3D model or keyboard.
@@ -46,7 +51,22 @@ function useGuardedApi(api: ScopeApi, lock: Lock, deny: () => void): ScopeApi {
   }, [api, lock, deny])
 }
 
-export function LabStation({ state, api: rawApi, guide, highlight = [], labels = false, onToggleLabels, onPart, holdingSlide = false, showView = true, lock = UNLOCKED, lockedMessage = 'Not yet. Follow the current step.' }: LabStationProps) {
+// The eyepiece, with an optional centre cross to aim at.
+function OptView({ state, reticle }: { state: ScopeState; reticle: boolean }) {
+  return (
+    <div className="relative h-full">
+      <OpticalView state={state} />
+      {reticle && (
+        <svg viewBox="-50 -50 100 100" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+          <circle r={4.5} fill="none" stroke="#f2a516" strokeWidth={0.6} strokeDasharray="1.6 1.2" />
+          <path d="M-9 0 H-5.5 M5.5 0 H9 M0 -9 V-5.5 M0 5.5 V9" stroke="#f2a516" strokeWidth={0.7} strokeLinecap="round" />
+        </svg>
+      )}
+    </div>
+  )
+}
+
+export function LabStation({ state, api: rawApi, guide, highlight = [], labels = false, onToggleLabels, onPart, holdingSlide = false, showView = true, lock = UNLOCKED, lockedMessage = 'Not yet. Follow the current step.', stageView = false, reticle = false }: LabStationProps) {
   const [toast, setToast] = useState(false)
   const toastTimer = useRef(0)
   const deny = useMemo(() => () => {
@@ -70,15 +90,15 @@ export function LabStation({ state, api: rawApi, guide, highlight = [], labels =
     <div className="station relative">
       {toast && <div className="lock-toast flex items-center gap-2" role="status"><LockIcon size={16} /> {lockedMessage}</div>}
       <aside className="station-guide">
-        <div className="station-guide-card">{guide}</div>
-        <div className="station-controls">
+        <div className="station-guide-card glow-room">{guide}</div>
+        <div className="station-controls glow-room">
           <Controls state={state} api={api} highlight={highlight} holdingSlide={holdingSlide} lock={stableLock} />
         </div>
       </aside>
 
       <section className="station-view" aria-label="Eyepiece">
         <div
-          className="min-h-0"
+          className="relative min-h-0"
           onWheel={(e) => {
             // Scroll on the eyepiece to fine focus, hold Shift for coarse.
             wheelAcc.current += e.deltaY
@@ -88,12 +108,13 @@ export function LabStation({ state, api: rawApi, guide, highlight = [], labels =
             else api.fine(d * 0.05)
           }}
         >
-          {showView ? <OpticalView state={state} /> : <div className="grid h-full place-items-center text-[var(--color-muted)]">The eyepiece view opens in the next part.</div>}
+          {!showView ? <div className="grid h-full place-items-center text-[var(--color-muted)]">The eyepiece view opens in the next part.</div>
+            : stageView ? <StageView state={state} api={api} /> : <OptView state={state} reticle={reticle} />}
         </div>
         {showView && (
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
             <Eye size={18} style={{ color: tone }} />
-            <span className="min-w-0 flex-1 font-bold leading-snug">{view.text}</span>
+            <span className="min-w-0 flex-1 font-bold leading-snug">{stageView ? 'Lining up by eye: move the slide until the specimen is over the light hole.' : view.text}</span>
             <span className="rounded-full bg-[var(--color-sunk)] px-2.5 py-1 text-sm font-extrabold tabular-nums">
               {10 * state.objective}x
             </span>

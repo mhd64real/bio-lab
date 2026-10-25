@@ -1,12 +1,21 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Lock as LockIcon, Power } from 'lucide-react'
-import { OBJECTIVES, OBJECTIVE_INFO, type ScopeState } from './model'
+import { focusHeight, OBJECTIVES, OBJECTIVE_INFO, optics, type Objective, type ScopeState } from './model'
 import type { ScopeApi } from './useScope'
 import type { PartId } from './Microscope3D'
 import { canObjective, canUse, UNLOCKED, type Lock } from './lock'
 
-// Speeds ramp up the longer a control is held, so a short tap makes a small move.
-export const ramp = (held: number, full: number) => Math.min(1, held / full) ** 2
+// Moving a specimen: a tap nudges it a small fixed step; holding waits a moment, then moves at a steady,
+// gentle speed (no speeding up, which makes people overshoot). Both scale with the field of view.
+// Returns the distance to move this frame. held is 0 on the first call of a press.
+export const STAGE_NUDGE = 0.05 // fraction of the field of view per tap
+export const stageStep = (fov: number, dt: number, held: number) => steady(fov * STAGE_NUDGE, fov * 0.5, dt, held)
+// The same for any control: nudge on the first call of a press, a pause, then a steady speed (units per second).
+export const steady = (nudge: number, speed: number, dt: number, held: number) => (held === 0 ? nudge : held < 0.25 ? 0 : speed * dt)
+// Focus. Coarse: a fixed, brisk pace (micrometres). Fine: scaled by the lens's depth of field, so the in-focus
+// zone takes about the same time to cross with every lens.
+export const coarseStep = (dt: number, held: number) => steady(150, 2000, dt, held)
+export const fineStep = (o: Objective, dt: number, held: number) => steady(OBJECTIVE_INFO[o].dof * 0.6, OBJECTIVE_INFO[o].dof * 4, dt, held)
 
 function useHold(step: (dt: number, held: number) => void) {
   const raf = useRef(0)
@@ -95,13 +104,23 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
   const hl = (...ids: PartId[]) => ids.some((i) => highlight.includes(i))
   const can = (k: Parameters<typeof canUse>[1]) => canUse(lock, k)
   const fov = OBJECTIVE_INFO[state.objective].fov
-  const coarse = (dir: number) => (dt: number, held: number) => api.coarse(dir * (500 + 2600 * ramp(held, 1.6)) * dt)
-  const fine = (dir: number) => (dt: number, held: number) => api.fine(dir * (2.5 + 110 * ramp(held, 3)) * dt)
+  const coarse = (dir: number) => (dt: number, held: number) => { const v = coarseStep(dt, held); if (v) api.coarse(dir * v) }
+  const fine = (dir: number) => (dt: number, held: number) => { const v = fineStep(state.objective, dt, held); if (v) api.fine(dir * v) }
   const move = (dx: number, dy: number) => (dt: number, held: number) => {
-    const v = fov * (0.25 + 0.9 * ramp(held, 1.5)) * dt
-    api.stage(dx * v, dy * v)
+    const v = stageStep(fov, dt, held)
+    if (v) api.stage(dx * v, dy * v)
   }
   const canMove = state.slide === 'clipped' && can('stage')
+  // Focus guide: shown while focusing is allowed with a slide on the stage. The button the student needs
+  // glows (raise below focus, lower above it); when only lowering is allowed, that is the one.
+  const focusing = state.slide !== 'none' && !state.broken && (can('coarse') || can('fine'))
+  const showGuide = focusing
+  const defocus = state.stageZ - focusHeight(state.objective)
+  const sharp = optics(state).blur <= 0.004
+  const glow = hl('coarse') && !can('coarse') && can('coarseDown') ? 'coarseDown'
+    : hl('coarse') && can('coarse') && optics(state).blur > 0.05 ? (defocus < 0 ? 'coarseUp' : 'coarseDown')
+    : hl('fine') && can('fine') && !sharp ? (defocus < 0 ? 'fineUp' : 'fineDown')
+    : null
 
   return (
     <div className="ctl-pad">
@@ -148,18 +167,20 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
       </Group>
 
       <Group title="Focus" attention={hl('coarse', 'fine')} locked={!can('coarse') && !can('fine') && !can('coarseDown')}>
-        <div className="grid grid-cols-2 gap-2">
-          <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('coarse') ? 'attention' : ''}`}>
+        <div className="ctl-focus grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.6rem] gap-2">
+          <div className="grid gap-2">
             <span className="ctl-sub" style={{ color: 'var(--color-primary)' }}>Coarse</span>
-            <HoldButton step={coarse(1)} label="Coarse focus, raise stage" kbd="PgUp" className="ctl-coarse" disabled={!can('coarse')}><ChevronUp size={20} />Up</HoldButton>
-            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className="ctl-coarse" disabled={!can('coarse') && !can('coarseDown')}><ChevronDown size={20} />Down</HoldButton>
+            <HoldButton step={coarse(1)} label="Coarse focus, raise stage" kbd="PgUp" className={`ctl-coarse ${glow === 'coarseUp' ? 'attention' : ''}`} disabled={!can('coarse')}><ChevronUp size={20} />Up</HoldButton>
+            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className={`ctl-coarse ${glow === 'coarseDown' ? 'attention' : ''}`} disabled={!can('coarse') && !can('coarseDown')}><ChevronDown size={20} />Down</HoldButton>
           </div>
-          <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('fine') ? 'attention' : ''}`}>
+          <div className="grid gap-2">
             <span className="ctl-sub" style={{ color: '#2f9c82' }}>Fine</span>
-            <HoldButton step={fine(1)} label="Fine focus, raise stage" kbd="]" className="ctl-fine" disabled={!can('fine')}><ChevronUp size={20} />Up</HoldButton>
-            <HoldButton step={fine(-1)} label="Fine focus, lower stage" kbd="[" className="ctl-fine" disabled={!can('fine')}><ChevronDown size={20} />Down</HoldButton>
+            <HoldButton step={fine(1)} label="Fine focus, raise stage" kbd="]" className={`ctl-fine ${glow === 'fineUp' ? 'attention' : ''}`} disabled={!can('fine')}><ChevronUp size={20} />Up</HoldButton>
+            <HoldButton step={fine(-1)} label="Fine focus, lower stage" kbd="[" className={`ctl-fine ${glow === 'fineDown' ? 'attention' : ''}`} disabled={!can('fine')}><ChevronDown size={20} />Down</HoldButton>
           </div>
+          {showGuide && <FocusGauge state={state} />}
         </div>
+        {showGuide && <FocusHint state={state} />}
       </Group>
 
       <Group title="Slide" attention={hl('stage', 'clips', 'stageKnobs')} locked={!can('place') && !can('clip') && !can('stage') && !can('remove')}>
@@ -214,15 +235,16 @@ export function useScopeKeys(state: ScopeState, api: ScopeApi, enabled = true) {
       const fov = OBJECTIVE_INFO[stateRef.current.objective].fov
       held.current.forEach((t0, key) => {
         const h = (now - t0) / 1000
-        const v = fov * (0.25 + 0.9 * ramp(h, 1.5)) * dt
+        const v = stageStep(fov, dt, Math.max(h, 1e-6))
         if (key === 'ArrowLeft') api.stage(-v, 0)
         if (key === 'ArrowRight') api.stage(v, 0)
         if (key === 'ArrowUp') api.stage(0, v)
         if (key === 'ArrowDown') api.stage(0, -v)
-        if (key === 'PageUp') api.coarse((500 + 2600 * ramp(h, 1.6)) * dt)
-        if (key === 'PageDown') api.coarse(-(500 + 2600 * ramp(h, 1.6)) * dt)
-        if (key === ']') api.fine((2.5 + 110 * ramp(h, 3)) * dt)
-        if (key === '[') api.fine(-(2.5 + 110 * ramp(h, 3)) * dt)
+        const hh = Math.max(h, 1e-6)
+        if (key === 'PageUp') api.coarse(coarseStep(dt, hh))
+        if (key === 'PageDown') api.coarse(-coarseStep(dt, hh))
+        if (key === ']') api.fine(fineStep(stateRef.current.objective, dt, hh))
+        if (key === '[') api.fine(-fineStep(stateRef.current.objective, dt, hh))
       })
       raf = held.current.size ? requestAnimationFrame(tick) : 0
     }
@@ -234,6 +256,17 @@ export function useScopeKeys(state: ScopeState, api: ScopeApi, enabled = true) {
         e.preventDefault()
         if (!held.current.has(e.key)) {
           held.current.set(e.key, performance.now())
+          // A key press nudges the slide straight away, like a tap on the button.
+          const n = stageStep(OBJECTIVE_INFO[stateRef.current.objective].fov, 0, 0)
+          if (e.key === 'ArrowLeft') api.stage(-n, 0)
+          if (e.key === 'ArrowRight') api.stage(n, 0)
+          if (e.key === 'ArrowUp') api.stage(0, n)
+          if (e.key === 'ArrowDown') api.stage(0, -n)
+          const o = stateRef.current.objective
+          if (e.key === 'PageUp') api.coarse(coarseStep(0, 0))
+          if (e.key === 'PageDown') api.coarse(-coarseStep(0, 0))
+          if (e.key === ']') api.fine(fineStep(o, 0, 0))
+          if (e.key === '[') api.fine(-fineStep(o, 0, 0))
           if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick) }
         }
         return
@@ -258,4 +291,33 @@ export function useScopeKeys(state: ScopeState, api: ScopeApi, enabled = true) {
       held.current.clear()
     }
   }, [api, enabled])
+}
+
+// How far the slide is from focus: a vertical gauge with the in-focus band in the middle and the lens at the
+// top. The scale is logarithmic, so both a centimetre and a micrometre away are readable.
+function FocusGauge({ state }: { state: ScopeState }) {
+  const info = OBJECTIVE_INFO[state.objective]
+  const d = state.stageZ - focusHeight(state.objective)
+  const range = Math.log10(1 + 12000 / info.dof)
+  const pos = Math.sign(d) * Math.min(1, Math.log10(1 + Math.abs(d) / info.dof) / range)
+  const top = 50 - pos * 32 // stays between the Lens and Slide labels
+  const sharp = optics(state).blur <= 0.004
+  return (
+    <div className="relative w-full rounded-[var(--radius-control)] bg-[var(--color-sunk)]" aria-label="Focus guide" role="img">
+      <span className="absolute left-0 right-0 top-1 text-center text-[0.65rem] font-extrabold uppercase text-[var(--color-muted)]">Lens</span>
+      <div className="absolute left-1/2 top-5 h-1.5 w-6 -translate-x-1/2 rounded-sm bg-[#64748b]" />
+      <div className="absolute left-1 right-1 rounded bg-[var(--color-ok-soft)]" style={{ top: 'calc(50% - 9px)', height: 18, border: '2px solid var(--color-ok)' }} />
+      <div className="absolute left-1/2 h-2 w-8 -translate-x-1/2 rounded-sm border-2 border-[#7fb0cc] bg-[#d6ecf7] transition-[top] duration-100" style={{ top: `calc(${top}% - 4px)`, boxShadow: sharp ? '0 0 0 3px rgba(34,180,85,0.45)' : undefined }} />
+      <span className="absolute bottom-1 left-0 right-0 text-center text-[0.65rem] font-extrabold uppercase text-[var(--color-muted)]">Slide</span>
+    </div>
+  )
+}
+
+function FocusHint({ state }: { state: ScopeState }) {
+  const o = optics(state)
+  const d = state.stageZ - focusHeight(state.objective)
+  const text = o.blur <= 0.004 ? 'In focus.'
+    : d < 0 ? (o.blur > 0.05 ? 'The slide is below focus: raise the stage (Up).' : 'Almost: raise the stage a little (Up).')
+    : (o.blur > 0.05 ? 'Past focus: lower the stage (Down).' : 'Just past focus: lower the stage a little (Down).')
+  return <p className={`mt-2 text-center text-sm font-extrabold ${o.blur <= 0.004 ? 'text-[var(--color-ok)]' : 'text-[var(--color-muted)]'}`}>{text}</p>
 }
