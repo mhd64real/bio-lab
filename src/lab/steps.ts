@@ -1,4 +1,4 @@
-import type { ScopeState } from '../scope/model'
+import type { Mount, ScopeState } from '../scope/model'
 import type { PartId } from '../scope/Microscope3D'
 import type { ChoiceQ } from '../ui/kit'
 import type { Lock } from '../scope/lock'
@@ -29,5 +29,8 @@ export interface ObserveStep {
   // Something the student must do before the question appears.
   before?: (s: ScopeState, seen: Set<string>) => boolean
   beforeText?: string
+  // A bench action done in the guide card while the slide stays on the stage. It records the flag 'acted';
+  // `mount` (optional) changes what is under the coverslip.
+  act?: { label: string; mount?: (m: Mount) => Mount }
 }
 

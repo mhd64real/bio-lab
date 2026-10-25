@@ -22,7 +22,7 @@ export interface TemState {
   damage: number // accumulated electron dose on the current area
   burnAt: { x: number; y: number } | null
   interlock: number // last time the airlock interlock refused, for the message
-  specimen: 'centrosome' | 'cilia' | 'nucleus' | 'leaf' | 'liver'
+  specimen: 'centrosome' | 'cilia' | 'nucleus' | 'leaf' | 'liver' | 'macrophage'
 }
 
 export type TemAction =
@@ -124,3 +124,7 @@ export const LEAF = { chloroplast: { x: 0, y: 9.6 - 1.6 }, mito: { x: Math.cos(1
 
 // In the 'liver' section, the middle cell's nucleus, rough ER stack, smooth ER patch and Golgi stack (see liverTissue).
 export const LIVER = { nucleus: { x: -4.5, y: -0.5 }, rer: { x: 4.6, y: -1.8 }, ser: { x: -0.8, y: -5.6 }, golgi: { x: 0.6, y: 3.3 } }
+
+// In the 'macrophage' section, the middle cell's large lysosome, the bacterium being digested and the
+// autophagosome round a worn-out mitochondrion (see macroTissue).
+export const MACRO = { lysosome: { x: 2.8, y: 2.6 }, bacterium: { x: 3.6, y: -1.8 }, autophagy: { x: -0.5, y: 3.4 } }

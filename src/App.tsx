@@ -9,6 +9,7 @@ import { Phase3 } from './phases/p3/Phase3'
 import { Phase4 } from './phases/p4/Phase4'
 import { Phase5 } from './phases/p5/Phase5'
 import { Phase6 } from './phases/p6/Phase6'
+import { Phase7 } from './phases/p7/Phase7'
 import { devUnlocked, progress, setDevUnlocked } from './lib/storage'
 
 function useHash() {
@@ -38,5 +39,6 @@ export function App() {
   if (hash.startsWith('#/p4')) return progress.get().phases.p3?.done || devUnlocked() ? <Phase4 /> : <Home />
   if (hash.startsWith('#/p5')) return progress.get().phases.p4?.done || devUnlocked() ? <Phase5 /> : <Home />
   if (hash.startsWith('#/p6')) return progress.get().phases.p5?.done || devUnlocked() ? <Phase6 /> : <Home />
+  if (hash.startsWith('#/p7')) return progress.get().phases.p6?.done || devUnlocked() ? <Phase7 /> : <Home />
   return <Home />
 }

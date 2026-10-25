@@ -133,6 +133,15 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
                 <Lightbulb size={18} className="mt-0.5 flex-none text-[#9a6400]" /> {step.tip}
               </p>
             )}
+            {step.act && (
+              <div className="mt-4">
+                <Button variant="soft" disabled={seen.has('acted') || state.slide === 'none'} onClick={() => {
+                  if (step.act!.mount && state.mount) api.setMount(step.act!.mount(state.mount))
+                  play('drop')
+                  see('acted')
+                }}>{step.act.label}</Button>
+              </div>
+            )}
             {step.question && (
               <div className="mt-4">
                 {ready ? (

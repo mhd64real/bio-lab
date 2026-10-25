@@ -4,11 +4,12 @@
 // 'mito': Hoechst and MitoTracker Green (mitochondria).
 // 'traffic': cells making a GFP-tagged membrane protein (VSVG ts045) and a far-red Golgi marker. At 40 °C the
 // protein folds wrongly and the ER holds on to it; at 32 °C it folds and travels ER -> Golgi -> plasma membrane.
+// 'lyso': macrophages that have swallowed GFP bacteria, with LysoTracker Deep Red (640 nm) in the lysosomes.
 // Units: focus z and stage in micrometres above the coverglass.
 
 export type Laser = 405 | 488 | 640
 export const LASERS: Laser[] = [405, 488, 640]
-export type ConfocalSpecimen = 'cyto' | 'nuclei' | 'mito' | 'traffic'
+export type ConfocalSpecimen = 'cyto' | 'nuclei' | 'mito' | 'traffic' | 'lyso'
 type LaserInfo = { name: string; target: string; colour: string }
 export const LASER_INFO: Record<ConfocalSpecimen, Partial<Record<Laser, LaserInfo>>> = {
   cyto: {
@@ -29,6 +30,11 @@ export const LASER_INFO: Record<ConfocalSpecimen, Partial<Record<Laser, LaserInf
     488: { name: '488 nm', target: 'GFP: the tagged protein', colour: '#22b455' },
     640: { name: '640 nm', target: 'Far-red Golgi marker', colour: '#e0479e' },
   },
+  lyso: {
+    405: { name: '405 nm', target: 'Hoechst: nucleus (DNA)', colour: '#6d5cf6' },
+    488: { name: '488 nm', target: 'GFP: the swallowed bacteria', colour: '#22b455' },
+    640: { name: '640 nm', target: 'LysoTracker: lysosomes', colour: '#e0479e' },
+  },
 }
 // Where the tagged protein is, minutes after the release to 32 °C: it leaves the ER (half-time about 5.5 min),
 // passes through the Golgi and reaches the plasma membrane (Golgi exit half-time about 12.5 min).
@@ -40,7 +46,9 @@ export function cargoSplit(min: number) {
 }
 // Specimen minutes per real second, live and in time-lapse.
 export const minutesPerSecond = (s: ConfocalState) => (s.timelapse ? 2 : 1 / 60)
-export const timelapseSpeed = (s: ConfocalState) => (s.specimen === 'traffic' ? 120 : 20)
+export const timelapseSpeed = (s: ConfocalState) => (s.specimen === 'traffic' || s.specimen === 'lyso' ? 120 : 20)
+// 'traffic' and 'lyso' run on a specimen clock, in minutes.
+export const clocked = (s: ConfocalState) => s.specimen === 'lyso' || (s.specimen === 'traffic' && s.temp === 32)
 // The mitochondrion that divides and fuses again, in the middle of the 'mito' dish (um), and its cycle
 // in specimen time units (seconds when live; 20 times faster in time-lapse). See mitoField in shaders.ts.
 export const MITO = { x: 6, y: 4, period: 60 }
@@ -67,7 +75,7 @@ export interface ConfocalState {
   specimen: ConfocalSpecimen
   timelapseSince: number // seconds (performance clock) when the time-lapse was last switched on
   temp: 40 | 32 // stage-top incubator, 'traffic' only
-  cargoMin: number // specimen minutes since the release to 32 °C
+  clockMin: number // specimen minutes: since the release to 32 °C ('traffic'), since imaging began ('lyso')
 }
 
 export type ConfocalAction =
@@ -109,7 +117,7 @@ export function initialConfocal(): ConfocalState {
     specimen: 'cyto',
     timelapseSince: 0,
     temp: 40,
-    cargoMin: 0,
+    clockMin: 0,
   }
 }
 
@@ -141,12 +149,13 @@ export function confocalReducer(s: ConfocalState, a: ConfocalAction): ConfocalSt
 const anyLaser = (s: ConfocalState) => LASERS.some((l) => s.lasers[l])
 
 // Photobleaching: each second of scanning adds a dose proportional to laser power squared.
-// The tagged protein travels whenever the dish is at 32 °C on the stage.
+// The tagged protein travels whenever the dish is at 32 °C on the stage; digestion runs whenever the dish is on.
 export function confocalTick(s: ConfocalState, dt: number): ConfocalState {
   let n = s
-  if (s.specimen === 'traffic' && s.dish && s.temp === 32) n = { ...n, cargoMin: s.cargoMin + dt * minutesPerSecond(s) }
+  if (s.dish && clocked(s)) n = { ...n, clockMin: s.clockMin + dt * minutesPerSecond(s) }
   if (!s.scanning || !anyLaser(s)) return n
-  return { ...n, dose: s.dose + s.laserPower * s.laserPower * dt * s.zoom }
+  // In time-lapse the laser scans one frame every few seconds instead of continuously, so it bleaches far less.
+  return { ...n, dose: s.dose + s.laserPower * s.laserPower * dt * s.zoom * (s.timelapse ? 0.1 : 1) }
 }
 
 export const bleach = (s: ConfocalState) => Math.exp(-0.058 * s.dose)
@@ -167,7 +176,7 @@ export function inFocusAmount(s: ConfocalState) {
     const slab = Math.exp(-((Math.max(0, NUC.zc - NUC.c - s.z, s.z - NUC.zc - NUC.c) / th) ** 2))
     return s.lasers[405] || s.lasers[488] ? slab : 0
   }
-  if (s.specimen === 'traffic') {
+  if (s.specimen === 'traffic' || s.specimen === 'lyso') {
     if (s.lasers[488] || s.lasers[640]) layers.push(Math.exp(-((Math.max(0, 0.6 - s.z, s.z - 3) / th) ** 2)))
     if (s.lasers[405]) layers.push(Math.max(w(2.5), w(4)))
     return layers.length ? Math.max(...layers) : 0

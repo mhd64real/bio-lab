@@ -119,7 +119,7 @@ export const CONFOCAL_TRAFFIC_STEPS: Step<CS>[] = [
   {
     id: 'release', title: 'Release!', body: 'Cool the stage to 32 °C, then turn on the time-lapse and watch the cell. Watch the clock in the corner.',
     highlight: ['temp', 'timelapse'], lock: (s) => (s.temp === 40 ? ['temp', 'focus'] : ['timelapse', 'focus']),
-    done: (s) => s.cargoMin >= 12,
+    done: (s) => s.clockMin >= 12,
   },
   { id: 'pause', title: 'Slow down', body: 'Turn the time-lapse off to look closely. (Time keeps passing, just at normal speed.)', highlight: ['timelapse'], lock: () => ['timelapse', 'focus'], done: (s) => !s.timelapse },
   ask<CS>('gather', 'On the move', 'Compare the picture now with the green net you saw before.', {
@@ -143,7 +143,7 @@ export const CONFOCAL_TRAFFIC_STEPS: Step<CS>[] = [
   }, ['focus', 'laser']),
   {
     id: 'watch', title: 'Where next?', body: 'Turn the time-lapse on again and keep watching until about 50 minutes after the release.',
-    highlight: ['timelapse'], lock: () => ['timelapse', 'focus', 'laser'], done: (s) => s.cargoMin >= 50,
+    highlight: ['timelapse'], lock: () => ['timelapse', 'focus', 'laser'], done: (s) => s.clockMin >= 50,
   },
   ask<CS>('final', 'Delivered', 'The Golgi is almost empty again.', {
     q: 'Where has the tagged protein ended up?',

@@ -9,7 +9,7 @@ uniform vec2 uRes;
 uniform float uFov;
 uniform vec2 uStage;
 uniform vec3 uBurn; // x, y, on
-uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus, 3 leaf, 4 liver
+uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus, 3 leaf, 4 liver, 5 macrophage
 out vec4 outColor;
 ${NOISE}
 
@@ -269,10 +269,15 @@ float mitoTem(vec2 lq, vec2 ax, float seed) {
   // Small dark matrix granules.
   matrix += 0.3 * smoothstep(0.25, 0.1, voronoi(lq / 0.12 + seed).x) * step(0.93, hash12(floor(lq / 0.12 + seed))) * lod(0.02);
   float d = dE < -0.022 ? matrix : (dE < 0.0 ? 0.22 : 0.0);
-  d = mix(d, 0.3, space * lod(0.015));
+  d = mix(d, 0.3, space);
   d = max(d, max(outer, inner) * 0.8);
-  d = max(d, cr * 0.85 * lod(0.015));
-  d = mix(d, 0.55, (1.0 - lod(0.015)) * step(dE, -0.03) * 0.5);
+  d = max(d, cr * 0.85);
+  // When the membrane pairs are too fine to resolve, each crista shows as one pale band in a darker matrix.
+  float band = (1.0 - smoothstep(0.009, 0.009 + gPx, abs(lq.x - cx - wav))) * along;
+  float dl = dE < -0.022 ? 0.56 + 0.06 * fbm(lq * 30.0 + seed) : (dE < 0.0 ? 0.3 : 0.0);
+  dl = mix(dl, 0.3, band * min(1.0, 0.018 / gPx));
+  dl = max(dl, max(outer, inner) * 0.8);
+  d = mix(dl, d, smoothstep(1.5, 3.0, 0.011 / gPx));
   // Below the resolution of the view, cristae blur into an even grey.
   return e <= 1.0 + 0.01 / rl ? d : (outer > 0.05 ? outer * 0.8 : -1.0);
 }
@@ -393,7 +398,7 @@ float cytosol(vec2 p, float ribAmount) {
   // Free ribosomes, crowded into loose clusters (polysomes) where the noise is high.
   float amt = ribAmount * (0.15 + 0.85 * smoothstep(0.4, 0.8, fbm(p * 6.0)));
   float rib = granules(p, 0.03, amt, 0.0085, 1.0);
-  return mix(tex + 0.05 * ribAmount, max(tex, 0.19 + 0.36 * rib), lod(0.016));
+  return mix(tex + 0.05 * ribAmount, max(tex, 0.19 + 0.36 * rib), lod(0.022));
 }
 
 // Rough ER: flattened sacs about 0.2 um apart, gently curved, each with its own bends, ending in rounded
@@ -631,6 +636,155 @@ float liverTissue(vec2 p) {
   return max(dens, pm * 0.82) * (1.0 + 0.12 * (fbm(p * 0.35 + 3.0) - 0.5));
 }
 
+// ---- White blood cell (macrophage) with lysosomes ----
+// A lysosome: one membrane around dense, finely granular enzyme content. Older (secondary) lysosomes are
+// bigger and mixed: dense granules, pale lipid drops and curled membrane remains (whorls) of what they digested.
+// lq: offset from the centre, r: radius, kind: 0 dense, 1 mixed. Returns density or -1 outside.
+float lysosome(vec2 lq, float r, float kind, float seed) {
+  float th = atan(lq.y, lq.x);
+  float rr = r * (1.0 + 0.05 * sin(3.0 * th + seed) + 0.03 * sin(5.0 * th + seed * 2.0));
+  float d = length(lq) - rr;
+  if (d > 0.03) return -1.0;
+  float memb = softLine(d, 0.0055);
+  if (d > 0.0) return memb > 0.08 ? max(0.2, memb * 0.8) : -1.0;
+  float gran = 0.6 * vnoise(lq * 120.0 + seed) + 0.4 * vnoise(lq * 260.0);
+  float dens = 0.74 + 0.08 * fbm(lq * 14.0 + seed) + 0.16 * (gran - 0.5) * lod(0.01);
+  if (kind > 0.5) {
+    // Mixed contents: patches of dense matter, pale drops and membrane whorls.
+    float patchy = smoothstep(0.4, 0.65, fbm(lq * 5.0 + seed));
+    dens = mix(0.34 + 0.1 * gran, 0.72 + 0.1 * gran, patchy);
+    vec2 wc = vec2(0.3, -0.2) * r;
+    float wr = length(lq - wc);
+    float whorl = softLine(abs(fract(wr / 0.024 + 0.3 * vnoise(lq * 30.0)) - 0.5) * 0.024, 0.0045) * smoothstep(0.4 * r, 0.3 * r, wr);
+    dens = max(dens, mix(0.45, 0.8 * whorl + 0.25, lod(0.012)) * smoothstep(0.4 * r, 0.3 * r, wr));
+    for (int k = 0; k < 3; k++) {
+      vec2 hk = hash22(vec2(float(k), seed + 2.0));
+      vec2 lc = (hk - 0.5) * r;
+      float lr = r * (0.08 + 0.08 * hk.y);
+      dens = mix(dens, 0.26, smoothstep(lr, lr - 0.012, length(lq - lc)));
+    }
+  }
+  // A thin pale halo just inside the membrane.
+  dens = mix(dens, 0.3, smoothstep(-0.03, -0.008, d) * 0.5);
+  return max(dens, memb * 0.8);
+}
+
+// A swallowed bacterium (a rod 1 um long) inside a phagosome that lysosomes have fused with: their dense
+// enzyme content lines one side, and the far end of the bacterium is already breaking up.
+float phagolysosome(vec2 lq, float seed) {
+  float e = length(lq / vec2(0.82, 0.52));
+  if (e > 1.12) return -1.0;
+  float rl = length(lq) / max(e, 1e-4);
+  float dV = (e - 1.0) * rl;
+  float vm = softLine(dV, 0.0055);
+  if (dV > 0.0) return vm > 0.08 ? max(0.2, vm * 0.8) : -1.0;
+  float dens = 0.16 + 0.05 * vnoise(lq * 60.0);
+  // Enzyme-rich lysosome content fused in along the lower side.
+  float side = smoothstep(-0.05, -0.32, lq.y + 0.08 * sin(lq.x * 6.0)) * smoothstep(-0.0, -0.06, dV);
+  dens = mix(dens, 0.62 + 0.12 * (vnoise(lq * 140.0) - 0.5), side);
+  // The bacterium: outer membrane, cell wall and inner membrane, dense cytoplasm full of ribosomes, a paler nucleoid.
+  vec2 bq = mat2(cos(0.25), sin(0.25), -sin(0.25), cos(0.25)) * (lq - vec2(-0.05, 0.1));
+  vec2 bb = vec2(0.42, 0.2);
+  vec2 bd2 = abs(bq) - bb + 0.2;
+  float bd = length(max(bd2, 0.0)) + min(max(bd2.x, bd2.y), 0.0) - 0.2;
+  float decay = smoothstep(0.05, 0.45, bq.x + 0.1 * vnoise(bq * 18.0)); // the right end is being digested
+  float wall = max(softLine(bd, 0.006), softLine(bd + 0.022, 0.006)) * (1.0 - 0.8 * decay * step(0.55, vnoise(bq * 40.0)));
+  if (bd < -0.022) {
+    float rib = smoothstep(0.35, 0.18, voronoi(bq / 0.022 + seed).x) * lod(0.01);
+    float cyt = 0.6 + 0.16 * (rib - 0.4) + 0.08 * (fbm(bq * 30.0) - 0.5) + 0.06 * (vnoise(bq * 200.0) - 0.5);
+    float nucleoid = smoothstep(0.55, 0.62, fbm(bq * 7.0 + seed)) * smoothstep(0.32, 0.1, abs(bq.x));
+    cyt = mix(cyt, 0.28 + 0.08 * vnoise(bq * 150.0), nucleoid);
+    dens = mix(cyt, 0.3 + 0.15 * vnoise(bq * 90.0), decay);
+  } else if (bd < 0.0) dens = 0.3;
+  dens = max(dens, wall * 0.8 * (1.0 - 0.5 * decay));
+  return max(dens, vm * 0.8);
+}
+
+// An autophagosome: a double membrane wrapped round a worn-out mitochondrion, whose inside is fading.
+float autophagosome(vec2 lq, float seed) {
+  float e = length(lq / vec2(0.72, 0.5));
+  if (e > 1.12) return -1.0;
+  float rl = length(lq) / max(e, 1e-4);
+  float dA = (e - 1.0) * rl;
+  float mem = max(softLine(dA, 0.0055), softLine(dA + 0.028, 0.0055));
+  if (dA > 0.0) return mem > 0.08 ? max(0.2, mem * 0.8) : -1.0;
+  if (dA > -0.028) return max(0.18, mem * 0.8);
+  float dens = 0.3 + 0.1 * vnoise(lq * 80.0 + seed);
+  float m = mitoTem(mat2(cos(0.3), sin(0.3), -sin(0.3), cos(0.3)) * (lq - vec2(-0.05, 0.0)), vec2(0.48, 0.27), seed);
+  if (m >= 0.0) dens = mix(m, 0.32 + 0.12 * vnoise(lq * 50.0), 0.45 * smoothstep(-0.2, 0.3, lq.x)); // breaking down
+  return max(dens, mem * 0.8);
+}
+
+float macroTissue(vec2 p) {
+  float dens = 0.06 + 0.03 * fbm(p * 0.8);
+  // Cells spread on a 20 um grid with resin between them; the cell at the origin is centred and not rotated.
+  vec2 g = floor(p / 20.0 + 0.5);
+  bool home = g.x == 0.0 && g.y == 0.0;
+  vec2 h = hash22(g + 13.0);
+  if (!home && h.x < 0.3) return dens;
+  vec2 c = g * 20.0 + (home ? vec2(0.0) : (h - 0.5) * 6.0);
+  float ang = home ? 0.0 : h.y * 6.2831;
+  vec2 q = rot(ang) * (p - c);
+  float seed = home ? 4.0 : hash12(g) * 30.0;
+  float th = atan(q.y, q.x);
+  // Irregular outline with ruffles and thin finger-like folds (pseudopods) for catching bacteria.
+  float R = (home ? 7.2 : 5.5 + 2.0 * h.x) * (1.0 + 0.1 * sin(3.0 * th + seed) + 0.05 * sin(7.0 * th + seed * 2.0));
+  float fk = floor((th + 3.14159) / 6.28318 * 26.0);
+  float ff = fract((th + 3.14159) / 6.28318 * 26.0) - 0.5;
+  float fh = hash12(vec2(fk, seed + 9.0));
+  R += step(0.62, fh) * (0.6 + 2.2 * (fh - 0.62)) * exp(-ff * ff / 0.018) + 0.15 * sin(th * 13.0 + seed);
+  float dEdge = R - length(q);
+  if (dEdge < -0.03) return dens;
+  float pm = softLine(dEdge, 0.0055);
+  if (dEdge < 0.0) return max(dens, pm * 0.8);
+  float cd = -1.0;
+  vec2 N = vec2(-2.5, -0.6);
+  vec2 nq = q - N;
+  if (length(nq) < 3.6) {
+    float n = nucleusSection(nq, vec2(3.1, 2.3), seed, vec3(0.6, 0.4, 0.55), false);
+    if (n >= 0.0) cd = n;
+  }
+  if (home && cd < 0.0) {
+    float v = lysosome(q - vec2(2.8, 2.6), 0.55, 1.0, 7.0);
+    if (v >= 0.0) cd = v;
+    if (cd < 0.0) { v = phagolysosome(q - vec2(3.6, -1.8), 3.0); if (v >= 0.0) cd = v; }
+    if (cd < 0.0) { v = autophagosome(q - vec2(-0.5, 3.4), 5.0); if (v >= 0.0) cd = v; }
+  }
+  // Many small dense lysosomes, a few bigger mixed ones.
+  if (cd < 0.0) {
+    const float LS = 1.1;
+    vec2 l0 = floor(q / LS);
+    for (int y = -1; y <= 1 && cd < 0.0; y++) for (int x = -1; x <= 1; x++) {
+      vec2 lc = l0 + vec2(x, y);
+      vec2 hl = hash22(lc + seed + 20.0);
+      if (hash12(lc + seed + 21.0) > 0.42) continue;
+      vec2 lp = (lc + 0.2 + 0.6 * hl) * LS;
+      if (length(lp - N) < 3.5 || length(lp) > R - 0.8) continue;
+      if (home && (length(lp - vec2(2.8, 2.6)) < 1.0 || length(lp - vec2(3.6, -1.8)) < 1.2 || length(lp - vec2(-0.5, 3.4)) < 1.1)) continue;
+      float big = step(0.85, hl.x);
+      float v = lysosome(q - lp, mix(0.14 + 0.18 * hl.y, 0.35 + 0.15 * hl.y, big), big, lc.x + lc.y * 7.0);
+      if (v >= 0.0) { cd = v; break; }
+    }
+  }
+  // Mitochondria.
+  if (cd < 0.0) {
+    const float MS = 2.2;
+    vec2 m0 = floor(q / MS);
+    for (int y = -1; y <= 1 && cd < 0.0; y++) for (int x = -1; x <= 1; x++) {
+      vec2 mc = m0 + vec2(x, y);
+      vec2 hm = hash22(mc + seed + 30.0);
+      if (hash12(mc + seed + 31.0) > 0.5) continue;
+      vec2 mp = (mc + 0.2 + 0.6 * hm) * MS;
+      if (length(mp - N) < 3.7 || length(mp) > R - 1.0) continue;
+      if (home && (length(mp - vec2(2.8, 2.6)) < 1.3 || length(mp - vec2(3.6, -1.8)) < 1.5 || length(mp - vec2(-0.5, 3.4)) < 1.4)) continue;
+      float v = mitoTem(rot(hm.x * 6.28) * (q - mp), vec2(0.45 + 0.2 * hm.y, 0.25), seed + mc.x);
+      if (v >= 0.0) { cd = v; break; }
+    }
+  }
+  if (cd < 0.0) cd = cytosol(p, 0.5);
+  return max(cd, pm * 0.8);
+}
+
 float nucleusTissue(vec2 p) {
   float dens = 0.06 + 0.03 * fbm(p * 0.8);
   vec2 g = floor(p / 26.0 + 0.5);
@@ -667,7 +821,8 @@ void main() {
   vec2 p = uStage + v * uFov;
 
   float dens;
-  if (uSpec > 3.5) dens = liverTissue(p);
+  if (uSpec > 4.5) dens = macroTissue(p);
+  else if (uSpec > 3.5) dens = liverTissue(p);
   else if (uSpec > 2.5) dens = leafTissue(p);
   else if (uSpec > 1.5) dens = nucleusTissue(p);
   else if (uSpec > 0.5) dens = ciliaSection(p);

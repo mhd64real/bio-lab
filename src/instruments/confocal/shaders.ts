@@ -12,8 +12,8 @@ uniform float uZ;
 uniform float uTh;      // optical section half-thickness, um
 uniform float uPsf;     // lateral resolution (blur sigma), um
 uniform vec3 uCh;       // 405, 488, 640 channels on
-uniform float uSpec;    // 0 cytoskeleton cells, 1 nuclei (Hoechst + GFP nuclear pores), 2 mitochondria, 3 protein traffic
-uniform float uMin;     // traffic: minutes since the release to 32 °C
+uniform float uSpec;    // 0 cytoskeleton cells, 1 nuclei (Hoechst + GFP nuclear pores), 2 mitochondria, 3 protein traffic, 4 lysosomes
+uniform float uMin;     // traffic: minutes since the release to 32 °C; lyso: minutes of watching
 out vec4 outColor;
 ${NOISE}
 
@@ -272,6 +272,86 @@ vec3 trafficField(vec2 p, float t, float sig, float px) {
   return col;
 }
 
+// Macrophages that have swallowed GFP bacteria (green), with LysoTracker in their lysosomes (magenta) and
+// Hoechst. uMin: minutes of watching. Lysosomes dart about along microtubules; one by one they gather on each
+// bacterium's sac and fuse with it, so magenta builds up around the green (white where they overlap); then
+// the enzymes digest the bacterium and its green fades.
+vec3 lysoField(vec2 p, float t, float sig, float px) {
+  const float SP = 50.0;
+  vec2 g = floor(p / SP + 0.5);
+  bool home = g.x == 0.0 && g.y == 0.0;
+  vec2 h = hash22(g + 31.0), h2 = hash22(g * 2.3 + 5.0);
+  if (!home && h.x < 0.25) return vec3(0.0);
+  vec2 c = g * SP + (home ? vec2(0.0) : (h - 0.5) * 12.0);
+  float ang = home ? 0.0 : h.y * 6.2831;
+  float R = home ? 14.0 : 11.0 + 4.0 * h.x;
+  vec2 q = rot(-ang) * (p - c);
+  float th = atan(q.y, q.x);
+  float ph = h2.x * 6.2831;
+  float rad = R * (1.0 + 0.12 * sin(2.0 * th + ph) + 0.08 * sin(5.0 * th + 2.0 * ph) + 0.03 * sin(11.0 * th + t * 0.05));
+  float d = rad - length(q);
+  if (d < -2.0) return vec3(0.0);
+  vec2 nc = vec2(-3.0, -1.0);
+  vec2 nq = q - nc;
+  float nr = length(nq / vec2(5.5, 4.2)) - 0.12 * smoothstep(0.0, 1.0, -nq.x / 5.5) * exp(-sq(nq.y / 2.0)); // kidney dent
+  float nuc = (1.0 - smoothstep(1.0 - px / 5.0 - 0.04, 1.0, nr)) * (0.65 + 0.45 * fbm(nq * 0.7 + g * 9.0));
+  vec3 col = uCh.x * vec3(0.30, 0.48, 1.0) * nuc * slab(1.5, 5.0);
+  if (d < 0.0) return col;
+
+  float green = 0.0, mag = 0.0;
+  // Three swallowed bacteria, each in its own sac; the later ones were eaten a few minutes later.
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec2 hb = hash22(vec2(fi, 3.0) + g);
+    vec2 bc = home ? (i == 0 ? vec2(5.0, 2.0) : i == 1 ? vec2(2.0, -6.5) : vec2(-6.5, 6.0)) : vec2(cos(fi * 2.1 + h.x * 6.0), sin(fi * 2.1 + h.x * 6.0)) * (R * 0.55);
+    float off = fi * 3.0 + (home ? 0.0 : (hb.x - 0.5) * 6.0);
+    float fuse = smoothstep(2.0 + off, 13.0 + off, uMin);
+    float left = 1.0 - smoothstep(9.0 + off, 34.0 + off, uMin); // bacterium not yet digested
+    float a = hb.y * 6.2831;
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 bq = q - bc;
+    float L = 1.0 * (0.55 + 0.45 * left);
+    float rod = capsule(bq, -dir * L, dir * L);
+    float bact = exp(-rod * rod / (2.0 * (0.12 + sig * sig))) * (1.0 - smoothstep(0.35, 0.5, rod));
+    bact *= mix(0.5 + 0.5 * vnoise(bq * 3.0 + fi), 1.0, left); // breaking into pieces as it goes
+    green += 1.6 * bact * left;
+    // The sac fills with lysosome contents: a rim at first, then the whole sac.
+    float sac = capsule(bq, -dir * 1.0, dir * 1.0);
+    float rim = exp(-sq((sac - 0.75) / (0.28 + sig)));
+    float fill = 1.0 - smoothstep(0.55, 0.95, sac);
+    mag += fuse * (0.9 * rim * (1.0 - 0.5 * fuse) + 1.1 * fill * smoothstep(0.3, 1.0, fuse));
+  }
+  // Lysosomes: dots about 0.6 um across, wandering and darting; some are pulled to a bacterium and merge in.
+  for (int j = 0; j < 70; j++) {
+    float fj = float(j);
+    vec2 hj = hash22(vec2(fj, 41.0) + g), hk = hash22(vec2(fj, 43.0) + g);
+    float a = hj.x * 6.2831;
+    float er = R * (1.0 + 0.12 * sin(2.0 * a + ph) + 0.08 * sin(5.0 * a + 2.0 * ph));
+    vec2 base = vec2(cos(a), sin(a)) * mix(6.5, er - 1.5, sqrt(hj.y));
+    vec2 wob = 1.2 * vec2(sin(t * (0.05 + 0.08 * hk.x) + hk.y * 30.0), cos(t * (0.04 + 0.07 * hk.y) + hk.x * 20.0));
+    float run = smoothstep(0.85, 1.0, fract(t / (25.0 + 30.0 * hk.x) + hk.y));
+    vec2 pos = base + wob + vec2(cos(a + 1.5), sin(a + 1.5)) * 3.0 * run;
+    float merge = 0.0;
+    if (j % 4 != 3) {
+      int bi = j % 3;
+      vec2 bc = home ? (bi == 0 ? vec2(5.0, 2.0) : bi == 1 ? vec2(2.0, -6.5) : vec2(-6.5, 6.0)) : vec2(cos(float(bi) * 2.1 + h.x * 6.0), sin(float(bi) * 2.1 + h.x * 6.0)) * (R * 0.55);
+      float off = float(bi) * 3.0 + (home ? 0.0 : (hash22(vec2(float(bi), 3.0) + g).x - 0.5) * 6.0);
+      float o = hk.x * 0.6;
+      float pull = smoothstep(o, o + 0.35, smoothstep(2.0 + off, 13.0 + off, uMin));
+      pos = mix(pos, bc + vec2(cos(fj), sin(fj)) * 1.0, pull);
+      merge = smoothstep(0.7, 1.0, pull);
+    }
+    float l = length(q - pos);
+    mag += (1.0 - merge) * exp(-l * l / (2.0 * (0.07 + sig * sig))) * (0.8 + 0.4 * hk.y);
+  }
+  float inside = smoothstep(-sig, sig, d);
+  // Faint natural glow of the cell itself (autofluorescence) shows its outline in the green channel.
+  float glow = 0.08 * (0.7 + 0.3 * vnoise(q * 0.6));
+  col += uCh.y * vec3(0.18, 1.0, 0.32) * (0.65 * green + glow) * inside * slab(0.6, 3.5);
+  col += uCh.z * vec3(1.0, 0.18, 0.72) * 0.7 * mag * inside * slab(0.6, 3.5);
+  return col;
+}
+
 void main() {
   // Frames arrive a few times a second, like a real scanning system.
   float t = floor(uTime * 4.0) / 4.0 * uSpeed;
@@ -279,6 +359,7 @@ void main() {
   vec2 p = v * uFov;
   float px = uFov / min(uRes.x, uRes.y);
   float sig = max(uPsf, px * 0.7);
+  if (uSpec > 3.5) { outColor = vec4(lysoField(p, t, sig, px), 1.0); return; }
   if (uSpec > 2.5) { outColor = vec4(trafficField(p, t, sig, px), 1.0); return; }
   if (uSpec > 1.5) { outColor = vec4(mitoField(p, t, sig, px), 1.0); return; }
   if (uSpec > 0.5) { outColor = vec4(nucleiField(p, t, sig, px), 1.0); return; }

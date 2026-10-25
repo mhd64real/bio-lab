@@ -7,6 +7,7 @@ export interface ScopeApi extends ScopeHandlers {
   place(mount: Mount): void
   remove(): void
   replace(): void
+  setMount(mount: Mount): void
 }
 
 export function useScope(init: () => ScopeState) {
@@ -45,6 +46,7 @@ export function useScope(init: () => ScopeState) {
     place: (mount) => { mountRef.current = mount; dispatch({ type: 'placeSlide', mount }) },
     remove: () => dispatch({ type: 'removeSlide' }),
     replace: () => dispatch({ type: 'replaceSlide' }),
+    setMount: (mount) => { mountRef.current = mount; dispatch({ type: 'setMount', mount }) },
   }), [])
 
   // The slide the student is holding, ready to place on the stage.

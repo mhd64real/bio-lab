@@ -4,7 +4,7 @@ import type { CtlProps, Instrument } from '../engine'
 import { Group, HoldButton, Slider, ramp } from '../../scope/Controls'
 import { CONFOCAL_POST, CONFOCAL_SPECIMEN } from './shaders'
 import {
-  bleach, confocalReducer, confocalTick, describeConfocal, fov, gainFactor, initialConfocal, LASER_INFO, LASERS, photons, section, timelapseSpeed,
+  bleach, confocalReducer, confocalTick, describeConfocal, fov, gainFactor, initialConfocal, LASER_INFO, LASERS, photons, section, timelapseSpeed, clocked,
   type ConfocalAction, type ConfocalState,
 } from './model'
 
@@ -21,7 +21,7 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
       scale={0.75}
       uniforms={{
         uSpeed: s.timelapse ? timelapseSpeed(s) : 1,
-        uMin: s.temp === 32 ? Math.max(0.001, s.cargoMin) : 0,
+        uMin: clocked(s) ? Math.max(0.001, s.clockMin) : 0,
         uFov: fov(s),
         uZ: s.z,
         uTh: section(s),
@@ -33,12 +33,15 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
         uHaze: Math.max(0, (s.pinhole - 1) / 4) * (s.objective === 63 ? 1 : 0.3),
         uSoft: (dry ? 9 : 1) + (s.pinhole - 0.5) * 0.6,
         uRange: s.range,
-        uSpec: s.specimen === 'traffic' ? 3 : s.specimen === 'mito' ? 2 : s.specimen === 'nuclei' ? 1 : 0,
+        uSpec: s.specimen === 'lyso' ? 4 : s.specimen === 'traffic' ? 3 : s.specimen === 'mito' ? 2 : s.specimen === 'nuclei' ? 1 : 0,
       }}
     />
+    {s.specimen === 'lyso' && s.dish && (
+      <span className="pointer-events-none absolute left-3 top-3 rounded bg-black/55 px-2 py-0.5 text-sm font-extrabold text-white tabular-nums">37 °C: {Math.floor(s.clockMin)} min of watching</span>
+    )}
     {s.specimen === 'traffic' && s.dish && (
       <span className="pointer-events-none absolute left-3 top-3 rounded bg-black/55 px-2 py-0.5 text-sm font-extrabold text-white tabular-nums">
-        {s.temp === 40 ? '40 °C: protein held in the ER' : `32 °C: ${Math.floor(s.cargoMin)} min after release`}
+        {s.temp === 40 ? '40 °C: protein held in the ER' : `32 °C: ${Math.floor(s.clockMin)} min after release`}
       </span>
     )}
     </div>
@@ -94,7 +97,7 @@ function ConfocalControls({ state: s, act, can, hl }: CtlProps<ConfocalState, Co
           ))}
         </div>
         <button type="button" disabled={!can('timelapse')} className={`ctl-btn mt-2 w-full justify-center ${s.timelapse ? 'ctl-on' : ''}`} onClick={() => act({ type: 'timelapse' })}>
-          <Timer size={18} /> {s.timelapse ? (s.specimen === 'traffic' ? 'Time-lapse on (2 minutes per second)' : 'Time-lapse on (20x faster)') : 'Time-lapse off'}
+          <Timer size={18} /> {s.timelapse ? (timelapseSpeed(s) === 120 ? 'Time-lapse on (2 minutes per second)' : 'Time-lapse on (20x faster)') : 'Time-lapse off'}
         </button>
       </Group>
 

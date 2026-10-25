@@ -34,7 +34,7 @@ export type SlideState = 'none' | 'loose' | 'clipped'
 
 export interface Bubble { x: number; y: number; r: number }
 
-export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt' | 'pond' | 'elodea' | 'pepper' | 'potato'
+export type SpecimenId = 'letter-e' | 'onion' | 'cheek' | 'yogurt' | 'pond' | 'elodea' | 'pepper' | 'potato' | 'redonion'
 
 export interface Mount {
   specimen: SpecimenId
@@ -101,6 +101,8 @@ export type ScopeAction =
   | { type: 'clip' }
   | { type: 'removeSlide' }
   | { type: 'replaceSlide' }
+  // Something added under the coverslip while the slide stays on the stage (e.g. salt water drawn through).
+  | { type: 'setMount'; mount: Mount }
   | { type: 'oil' }
   | { type: 'phase' }
   | { type: 'cleanLens' }
@@ -174,6 +176,8 @@ export function scopeReducer(s: ScopeState, a: ScopeAction): ScopeState {
       return { ...s, phase: !s.phase }
     case 'cleanLens':
       return { ...s, lensOily: false }
+    case 'setMount':
+      return s.slide === 'none' ? s : { ...s, mount: a.mount }
     case 'replaceSlide':
       // A fresh slide of the same specimen after a crash.
       return { ...s, broken: false, stageZ: Math.min(s.stageZ, 6000) }
