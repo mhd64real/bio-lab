@@ -90,8 +90,8 @@ export function LabStation({ state, api: rawApi, guide, highlight = [], labels =
     <div className="station relative">
       {toast && <div className="lock-toast flex items-center gap-2" role="status"><LockIcon size={16} /> {lockedMessage}</div>}
       <aside className="station-guide">
-        <div className="station-guide-card glow-room">{guide}</div>
-        <div className="station-controls glow-room">
+        <div className="station-guide-card">{guide}</div>
+        <div className="station-controls">
           <Controls state={state} api={api} highlight={highlight} holdingSlide={holdingSlide} lock={stableLock} />
         </div>
       </aside>

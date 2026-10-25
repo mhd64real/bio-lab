@@ -164,8 +164,8 @@ export function InstrumentStation<S, A extends Action>({ inst, state, dispatch, 
     <div className="station relative">
       {toast && <div className="lock-toast flex items-center gap-2" role="status"><LockIcon size={16} /> Not yet. Follow the current step.</div>}
       <aside className="station-guide">
-        <div className="station-guide-card glow-room">{guide}</div>
-        <div className="station-controls glow-room"><Controls state={state} act={act} can={can} hl={hl} /></div>
+        <div className="station-guide-card">{guide}</div>
+        <div className="station-controls"><Controls state={state} act={act} can={can} hl={hl} /></div>
       </aside>
       <section className="station-view" aria-label={inst.name}>
         <div className="min-h-0"><View state={state} /></div>

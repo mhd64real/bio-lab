@@ -83,7 +83,17 @@ export function Slider({ value, onChange, label, colour, attention, disabled }: 
 export function Group({ title, children, attention, locked }: { title: string; children: ReactNode; attention?: boolean; locked?: boolean }) {
   const ref = useRef<HTMLElement>(null)
   // Bring the control the guide is pointing at into view when the pad is scrolled.
-  useEffect(() => { if (attention) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [attention])
+  // A card that lights up below the visible part of the column scrolls up only far enough to show its heading
+  // and first row, so the step's instructions above it stay in view.
+  useEffect(() => {
+    const el = ref.current
+    const col = el?.closest('.station-guide')
+    if (!attention || !el || !col) return
+    const r = el.getBoundingClientRect(), c = col.getBoundingClientRect()
+    const peek = 110
+    if (r.top > c.bottom - peek) col.scrollBy({ top: r.top - (c.bottom - peek), behavior: 'smooth' })
+    else if (r.bottom < c.top + 40) col.scrollBy({ top: r.top - c.top - 20, behavior: 'smooth' })
+  }, [attention])
   return (
     <section ref={ref} className={`ctl-group ${attention ? 'attention' : ''} ${locked ? 'ctl-group-locked' : ''}`}>
       <h3 className="ctl-title flex items-center gap-1.5">{title}{locked && <LockIcon size={14} className="text-[var(--color-faint)]" aria-label="Locked for this step" />}</h3>
@@ -178,7 +188,7 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
             <HoldButton step={fine(1)} label="Fine focus, raise stage" kbd="]" className={`ctl-fine ${glow === 'fineUp' ? 'attention' : ''}`} disabled={!can('fine')}><ChevronUp size={20} />Up</HoldButton>
             <HoldButton step={fine(-1)} label="Fine focus, lower stage" kbd="[" className={`ctl-fine ${glow === 'fineDown' ? 'attention' : ''}`} disabled={!can('fine')}><ChevronDown size={20} />Down</HoldButton>
           </div>
-          {showGuide && <FocusGauge state={state} />}
+          {showGuide && <FocusGauge state={state} fine={hl('fine') || (!can('coarse') && can('fine'))} />}
         </div>
         {showGuide && <FocusHint state={state} />}
       </Group>
@@ -294,23 +304,35 @@ export function useScopeKeys(state: ScopeState, api: ScopeApi, enabled = true) {
 }
 
 // How far the slide is from focus: a vertical gauge with the in-focus band in the middle and the lens at the
-// top. The scale is logarithmic, so both a centimetre and a micrometre away are readable.
-function FocusGauge({ state }: { state: ScopeState }) {
+// top. Linear, so the marker moves steadily while a button is held. It has two ranges: the whole coarse
+// travel (10 mm) while coarse focusing, and 40 depths of field while fine focusing (fine focus moves in
+// depths of field too). Beyond the range the marker waits at the end with an arrow.
+function FocusGauge({ state, fine }: { state: ScopeState; fine: boolean }) {
   const info = OBJECTIVE_INFO[state.objective]
   const d = state.stageZ - focusHeight(state.objective)
-  const range = Math.log10(1 + 12000 / info.dof)
-  const pos = Math.sign(d) * Math.min(1, Math.log10(1 + Math.abs(d) / info.dof) / range)
+  const range = fine ? info.dof * 40 : 10000
+  const pos = Math.max(-1, Math.min(1, d / range))
   const top = 50 - pos * 32 // stays between the Lens and Slide labels
   const sharp = optics(state).blur <= 0.004
+  // The in-focus zone on this scale, never thinner than a few pixels.
+  const zone = Math.max(10, (focusZone(state) / range) * 64 * 1.6)
+  const beyond = Math.abs(d) > range
   return (
-    <div className="relative w-full rounded-[var(--radius-control)] bg-[var(--color-sunk)]" aria-label="Focus guide" role="img">
+    <div className="relative w-full rounded-[var(--radius-control)] bg-[var(--color-sunk)]" aria-label={`Focus guide (${fine ? 'fine' : 'coarse'} scale)`} role="img">
       <span className="absolute left-0 right-0 top-1 text-center text-[0.65rem] font-extrabold uppercase text-[var(--color-muted)]">Lens</span>
       <div className="absolute left-1/2 top-5 h-1.5 w-6 -translate-x-1/2 rounded-sm bg-[#64748b]" />
-      <div className="absolute left-1 right-1 rounded bg-[var(--color-ok-soft)]" style={{ top: 'calc(50% - 9px)', height: 18, border: '2px solid var(--color-ok)' }} />
-      <div className="absolute left-1/2 h-2 w-8 -translate-x-1/2 rounded-sm border-2 border-[#7fb0cc] bg-[#d6ecf7] transition-[top] duration-100" style={{ top: `calc(${top}% - 4px)`, boxShadow: sharp ? '0 0 0 3px rgba(34,180,85,0.45)' : undefined }} />
+      <div className="absolute left-1 right-1 rounded bg-[var(--color-ok-soft)]" style={{ top: `calc(50% - ${zone / 2}px)`, height: zone, border: '2px solid var(--color-ok)' }} />
+      <div className="absolute left-1/2 h-2 w-8 -translate-x-1/2 rounded-sm border-2 border-[#7fb0cc] bg-[#d6ecf7]" style={{ top: `calc(${top}% - 4px)`, boxShadow: sharp ? '0 0 0 3px rgba(34,180,85,0.45)' : undefined }} />
+      {beyond && <span className="absolute left-0 right-0 text-center text-xs font-black text-[#7fb0cc]" style={{ top: d < 0 ? `calc(${top}% + 5px)` : `calc(${top}% - 17px)` }}>{d < 0 ? '▼' : '▲'}</span>}
       <span className="absolute bottom-1 left-0 right-0 text-center text-[0.65rem] font-extrabold uppercase text-[var(--color-muted)]">Slide</span>
     </div>
   )
+}
+
+// Half-height of the in-focus zone, micrometres (where blur <= 0.004, see blurAt in model.ts).
+function focusZone(s: ScopeState) {
+  const dof = OBJECTIVE_INFO[s.objective].dof * (1.7 - 0.8 * s.iris)
+  return (0.004 / 0.0035 + 0.35) * dof
 }
 
 function FocusHint({ state }: { state: ScopeState }) {
