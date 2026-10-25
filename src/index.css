@@ -199,8 +199,11 @@ button:disabled { cursor: default; }
   grid-template-areas: 'guide view side';
 }
 .station-guide { grid-area: guide; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.6rem; }
-.station-guide-card { min-height: 0; max-height: 58vh; overflow: auto; border-radius: var(--radius-card); }
-.station-controls { min-height: 0; overflow: auto; border-radius: var(--radius-card); }
+/* Scrolling panels clip whatever pokes outside them, so they get a margin of empty space (padding, cancelled
+   by a negative margin) wide enough for the attention pulse around a highlighted card. */
+.glow-room { padding: 14px; margin: -14px; }
+.station-guide-card { min-height: 0; max-height: calc(58vh + 28px); overflow: auto; padding: 14px; margin: -14px; }
+.station-controls { min-height: 0; overflow: auto; padding: 14px; margin: -14px; }
 .station-view { grid-area: view; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 0.6rem; }
 .station-side { grid-area: side; min-height: 0; display: grid; }
 .station-scope { background: linear-gradient(#fbfcfe, #eef3f8); border: 1px solid var(--color-line); border-radius: var(--radius-card); overflow: hidden; position: relative; min-height: 0; }

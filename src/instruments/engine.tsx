@@ -81,10 +81,11 @@ function PhotoPanel<S, A extends Action>({ inst, highlight, can, act, onPart, la
   const [picked, setPicked] = useState<string | null>(null)
   const info = inst.parts.find((p) => p.id === (picked ?? highlight.find((h) => inst.parts.some((p) => p.id === h))))
   return (
-    <div className="grid min-h-0 content-start gap-2 overflow-auto">
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-white">
+    <div className="glow-room grid min-h-0 content-start gap-2 overflow-auto">
+    {/* Not clipped, so the pulsing hotspots near the photo's edges stay whole; the photo itself is rounded. */}
+    <div className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-white">
       <div className="relative w-full" style={{ aspectRatio: '720 / 538' }}>
-        <img src={art(inst.photo)} alt={inst.name} className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+        <img src={art(inst.photo)} alt={inst.name} className="absolute inset-0 h-full w-full rounded-[var(--radius-card)] object-contain" draggable={false} />
         {inst.parts.map((p) => {
           const lit = highlight.includes(p.id)
           const usable = !!p.act && can(inst.keyOf(p.act))
