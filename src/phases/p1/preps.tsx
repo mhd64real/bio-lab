@@ -1,6 +1,8 @@
 import { Hot, type PrepDef, type SceneProps } from '../../lab/PrepRunner'
 import { BlotPaper, Bottle, Caption, CoverInset, Dropper, mix, Slide, Stage } from './sceneKit'
 import { OnionArtScene } from './onionArt'
+import { CheekArtScene } from './cheekArt'
+import { GramArtScene } from './gramArt'
 
 const WATER: [number, number, number] = [150, 205, 240]
 const IODINE: [number, number, number] = [205, 145, 35]
@@ -176,7 +178,7 @@ function ScrapeInset({ p }: { p: number }) {
   )
 }
 
-function CheekScene({ flags, active, progress, angle, bubbles }: SceneProps) {
+export function CheekScene({ flags, active, progress, angle, bubbles }: SceneProps) {
   const has = (f: string) => flags.has(f)
   const stained = has('stain') ? 1 : active === 'stain' && has('stain:started') ? progress : 0
   const liquid = mix(WATER, BLUE, stained, 0.35 + 0.15 * stained)
@@ -223,7 +225,7 @@ function CheekScene({ flags, active, progress, angle, bubbles }: SceneProps) {
 
 export const CHEEK_PREP: PrepDef = {
   name: 'Cheek cell smear',
-  Scene: CheekScene,
+  Scene: CheekArtScene,
   steps: [
     { id: 'open', kind: 'tap', action: 'Tap the swab packet to open it', title: 'Open a sterile swab', body: 'Take a new, sterile cotton swab from its packet. Never use a swab that has touched anything else.' },
     { id: 'scrape', kind: 'drag', action: 'Drag to rub the inside of your cheek', title: 'Rub the inside of your cheek', body: 'Gently rub the swab on the inside of your cheek. The lining of your mouth sheds cells all the time, so they come off easily and it does not hurt.' },
@@ -287,7 +289,7 @@ function smearColour(flags: Set<string>, active: string | null, p: number, held:
   return mix(cream, cream, 0, 0.9)
 }
 
-function GramScene({ flags, active, progress }: SceneProps) {
+export function GramScene({ flags, active, progress }: SceneProps) {
   const has = (f: string) => flags.has(f)
   const smear = has('smear') ? 1 : active === 'smear' ? progress : 0
   const colour = smearColour(flags, active, progress, undefined)
@@ -362,7 +364,7 @@ function GramScene({ flags, active, progress }: SceneProps) {
 
 export const GRAM_PREP: PrepDef = {
   name: 'Gram stain of yogurt bacteria',
-  Scene: GramScene,
+  Scene: GramArtScene,
   steps: [
     { id: 'water', kind: 'tap', action: 'Tap the slide to add a small drop of water', title: 'A small drop of water', body: 'Put one small drop of water in the middle of a clean slide.' },
     { id: 'smear', kind: 'drag', action: 'Drag to spread a thin smear', title: 'Make a thin smear', body: 'Touch the loop to the yogurt, mix a tiny amount into the drop and spread it into a thin film. Thin is important: in a thick smear the bacteria pile up on top of each other.' },

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { CheckCircle2, Lightbulb, RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/kit'
 import { play } from '../../lib/sound'
+import { art, ArtStage, Sprite } from '../../lab/artKit'
 import type { Bubble, Mount } from '../../scope/model'
 
 type Stage = 'cut' | 'place' | 'drop' | 'cover' | 'result'
@@ -87,52 +88,39 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
       </aside>
 
       <section className="prep-bench card" aria-label="Lab bench">
-        <svg viewBox="0 0 820 480" className="h-full w-full" role="img" aria-label="Bench with newspaper, slide, dropper and coverslip">
-          <defs>
-            <linearGradient id="glass" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stopColor="#f3fbff" />
-              <stop offset="1" stopColor="#d6ecf7" />
-            </linearGradient>
-            <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="5" floodOpacity="0.15" /></filter>
-          </defs>
-
-          {/* Newspaper clipping */}
-          <g transform="translate(40 40) rotate(-4)" filter="url(#soft)">
-            <rect width="250" height="300" rx="4" fill="#f4f0e6" />
-            {Array.from({ length: 13 }, (_, i) => (
-              <text key={i} x="16" y={40 + i * 19} fontFamily="Georgia, serif" fontSize="12.5" fill="#3a3a3a">
-                {['Students at the school will', 'help the science club build', 'a new garden next week. The', 'plan includes fresh beds for', 'herbs, a small pond and a', 'shelter where bees can rest.', 'Parents are welcome to join', 'the team on Saturday morning,', 'when the first seeds will be', 'planted near the east gate.', 'Tools and gloves are provided', 'and the club asks everyone to', 'bring a bottle of water along.'][i]}
-              </text>
-            ))}
-            <text x="16" y="22" fontFamily="Georgia, serif" fontWeight="700" fontSize="15" fill="#1c1c1c">Garden project begins</text>
+        <ArtStage label="Bench with newspaper, scissors, slide, dropper and coverslips">
+          {/* Newspaper clipping: a photo of blank newsprint with the article printed on it in code. */}
+          <g transform="translate(40 40) rotate(-4)">
+            <image href={art('p0/newsprint')} x="-6" y="-4" width="262" height="310" preserveAspectRatio="none" filter="url(#photoSh)" />
+            <g style={{ mixBlendMode: 'multiply' }}>
+              {Array.from({ length: 13 }, (_, i) => (
+                <text key={i} x="16" y={40 + i * 19} fontFamily="Georgia, serif" fontSize="12.5" fill="#2e2e2e" opacity="0.88">
+                  {['Students at the school will', 'help the science club build', 'a new garden next week. The', 'plan includes fresh beds for', 'herbs, a small pond and a', 'shelter where bees can rest.', 'Parents are welcome to join', 'the team on Saturday morning,', 'when the first seeds will be', 'planted near the east gate.', 'Tools and gloves are provided', 'and the club asks everyone to', 'bring a bottle of water along.'][i]}
+                </text>
+              ))}
+              <text x="16" y="22" fontFamily="Georgia, serif" fontWeight="700" fontSize="15" fill="#151515">Garden project begins</text>
+            </g>
             {stage === 'cut' ? (
               <g onClick={() => { play('clip'); setStage('place') }} className="cursor-pointer">
                 <circle cx="38" cy="55" r="13" fill="rgba(242,165,22,0.15)" stroke="#f2a516" strokeWidth="3" strokeDasharray="5 4" className="attention-svg" />
                 <rect x="14" y="32" width="48" height="46" fill="transparent" />
               </g>
             ) : (
-              <rect x="29" y="45" width="18" height="18" fill="#e6e1d4" stroke="#bdb5a3" />
+              <rect x="29" y="45" width="18" height="18" fill="#c9c9c4" opacity="0.9" />
             )}
           </g>
 
-          {/* Scissors */}
-          <g transform="translate(220 330) rotate(-30)" opacity={stage === 'cut' ? 1 : 0.6}>
-            <ellipse cx="0" cy="0" rx="18" ry="12" fill="none" stroke="#e0474c" strokeWidth="7" />
-            <ellipse cx="0" cy="34" rx="18" ry="12" fill="none" stroke="#e0474c" strokeWidth="7" />
-            <path d="M14 6 L96 26 L16 28 Z" fill="#c9d1da" />
-            <path d="M14 28 L96 10 L16 6 Z" fill="#dfe5ec" />
-          </g>
+          <Sprite src="p0/scissors" x={250} y={380} w={170} h={83} rot={-24} opacity={stage === 'cut' ? 1 : 0.85} />
 
           {/* Glass slide */}
           <g transform="translate(330 250)" onClick={() => { if (stage === 'place') { play('slide'); setStage('drop') } }} className={stage === 'place' ? 'cursor-pointer' : ''}>
-            <rect width="380" height="120" rx="6" fill="url(#glass)" stroke="#9cc3d8" strokeWidth="2" filter="url(#soft)" />
-            <rect x="8" y="8" width="80" height="104" rx="3" fill="#ffffff" stroke="#dfe5ec" />
+            <image href={art('shared/slide')} x="-12" y="-8" width="404" height="136" opacity="0.88" filter="url(#sh)" />
             <text x="48" y="66" textAnchor="middle" fontWeight="800" fontSize="14" fill="#5a6779">e</text>
             {stage === 'place' && <rect x="-6" y="-6" width="392" height="132" rx="10" fill="none" stroke="#f2a516" strokeWidth="4" strokeDasharray="10 7" />}
             {paperOnSlide && (
               <g>
                 {water && <ellipse cx="205" cy="60" rx={stage === 'result' ? 62 : 34} ry={stage === 'result' ? 46 : 26} fill="rgba(120,190,235,0.35)" />}
-                <rect x="190" y="45" width="30" height="30" fill="#ece6d8" stroke="#bdb5a3" />
+                <rect x="190" y="45" width="30" height="30" fill="#dcdcd6" stroke="#b9b9b2" />
                 <text x="205" y="67" textAnchor="middle" fontFamily="Georgia, serif" fontSize="22" fill="#1c1c1c">e</text>
                 {water && stage !== 'result' && <ellipse cx="205" cy="58" rx="26" ry="18" fill="rgba(140,205,245,0.45)" stroke="rgba(80,150,200,0.6)" />}
               </g>
@@ -140,9 +128,8 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
             {stage === 'result' && bubbles.map((b, i) => (
               <circle key={i} cx={205 + b.x * 22} cy={60 - b.y * 16} r={3 + b.r * 9} fill="rgba(255,255,255,0.55)" stroke="#5a6779" strokeWidth="1.5" />
             ))}
-            {/* Coverslip, hinged on its left edge */}
             {stage === 'result' && (
-              <rect x="150" y="10" width="110" height="100" rx="2" fill="rgba(214,236,247,0.35)" stroke="#7fb0cc" strokeWidth="1.5" />
+              <rect x="150" y="10" width="110" height="100" rx="2" fill="rgba(225,240,250,0.28)" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
             )}
             {stage === 'cover' && (
               <g transform={`translate(150 60) rotate(${-angle * 0.9})`}>
@@ -153,23 +140,16 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
 
           {/* Dropper */}
           <g
-            transform={`translate(${stage === 'drop' ? 520 : 690} ${stage === 'drop' ? 110 : 90})`}
+            transform={`translate(${stage === 'drop' ? 535 : 705} ${stage === 'drop' ? 175 : 150})`}
             onClick={() => { if (stage === 'drop') { play('drop'); setStage('cover') } }}
             className={stage === 'drop' ? 'cursor-pointer' : ''}
           >
-            {stage === 'drop' && <circle cx="15" cy="70" r="70" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" />}
-            <rect x="0" y="0" width="30" height="46" rx="12" fill="#e0474c" />
-            <path d="M4 44 L26 44 L19 128 L11 128 Z" fill="rgba(214,236,247,0.95)" stroke="#7fb0cc" strokeWidth="2" />
-            <path d="M8 80 L22 80 L19 126 L11 126 Z" fill="rgba(120,190,235,0.6)" />
+            {stage === 'drop' && <circle cx="0" cy="0" r="72" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" />}
+            <Sprite src="shared/dropper" x={0} y={0} w={24} h={132} rot={stage === 'drop' ? 0 : 8} />
           </g>
 
-          {/* Coverslip box */}
-          <g transform="translate(560 40)">
-            <rect width="110" height="70" rx="8" fill="#ffffff" stroke="#dfe5ec" strokeWidth="2" filter="url(#soft)" />
-            <text x="55" y="32" textAnchor="middle" fontWeight="800" fontSize="13" fill="#5a6779">COVERSLIPS</text>
-            <text x="55" y="50" textAnchor="middle" fontSize="11" fill="#8a96a8">22 x 22 mm</text>
-          </g>
-        </svg>
+          <Sprite src="p0/coverslips" x={620} y={78} w={80} h={85} />
+        </ArtStage>
 
         {stage === 'cover' && (
           <div className="prep-lower">

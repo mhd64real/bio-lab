@@ -6,7 +6,10 @@ import sharp from 'sharp'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const [sheet, outDir, ...specs] = process.argv.slice(2)
+// --strict: remove every trace of magenta (for sheets with no real purples or pinks, e.g. clear plastic).
+const args = process.argv.slice(2)
+const strict = args.includes('--strict')
+const [sheet, outDir, ...specs] = args.filter((a) => a !== '--strict')
 fs.mkdirSync(outDir, { recursive: true })
 const { data, info } = await sharp(sheet).removeAlpha().raw().toBuffer({ resolveWithObject: true })
 const W = info.width, H = info.height
@@ -40,8 +43,10 @@ for (let i = 0, j = 0; i < W * H; i++, j += 3) {
   let r = data[j], g = data[j + 1], b = data[j + 2]
   // Despill everywhere: no object here is genuinely magenta, so any red+blue excess over green is spill
   // (it also clears the tint seen through clear plastic and glass).
+  // Only colours close to the key's hue (red and blue about equal) count as spill, so real purples and pinks survive.
   const excess = Math.min(r, b) - g
-  if (excess > 0) { r -= excess; b -= excess }
+  const balance = strict ? 1 : 1 - Math.min(1, Math.abs(r - b) / 60)
+  if (excess > 0 && balance > 0) { r -= excess * balance; b -= excess * balance }
   let a = choked[i]
   if (a > 0.98) a = 1
   rgba[i * 4] = r; rgba[i * 4 + 1] = g; rgba[i * 4 + 2] = b; rgba[i * 4 + 3] = Math.round(Math.max(0, a) * 255)
@@ -67,7 +72,7 @@ for (let s = 0; s < W * H; s++) {
   boxes.push({ x0, y0, x1, y1, n })
 }
 // Merge small fragments (root hairs etc.) into the nearest big object.
-const big = boxes.filter((b) => b.n > W * H * 0.004)
+const big = boxes.filter((b) => b.n > W * H * 0.0025)
 for (const b of boxes) {
   if (big.includes(b) || b.n < 30) continue
   const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2
