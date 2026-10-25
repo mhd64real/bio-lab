@@ -28,6 +28,15 @@ const BOTTLES = [
   { id: 'safranin', x: 540, sprite: 'safranin', colour: '#d6336c', label: 'Safranin' },
 ]
 
+// The wash bottle while rinsing, tipped nozzle-down over the slide, and where its nozzle tip ends up.
+// The nozzle tip is at (23, 5) in the 300 x 144 photo (its topmost pixel); drawn at half size, centred, mirrored top to bottom.
+const WASH = { x: 600, y: 230, rot: -28 }
+const WASH_TIP = (() => {
+  const lx = 23 * 0.5 - 75, ly = -(5 * 0.5 - 36)
+  const a = (WASH.rot * Math.PI) / 180
+  return { x: WASH.x + lx * Math.cos(a) - ly * Math.sin(a), y: WASH.y + lx * Math.sin(a) + ly * Math.cos(a) }
+})()
+
 export function GramArtScene({ flags, active, progress }: SceneProps) {
   const has = (f: string) => flags.has(f)
   const smear = has('smear') ? 1 : active === 'smear' ? progress : 0
@@ -81,13 +90,18 @@ export function GramArtScene({ flags, active, progress }: SceneProps) {
         )
       })}
 
-      <Hot id={['rinse1', 'rinse2', 'rinse3', 'rinse4']} ring={{ cx: 730, cy: 110, r: 74 }}>
-        {!rinsing && <Sprite src={GR('wash')} x={730} y={110} w={150} h={72} rot={-10} />}
+      <Hot id={['rinse1', 'rinse2', 'rinse3', 'rinse4']} ring={{ cx: 735, cy: 52, r: 62 }}>
+        {!rinsing && <Sprite src={GR('wash')} x={735} y={52} w={150} h={72} rot={-10} />}
       </Hot>
       {rinsing && (
         <g>
-          <Sprite src={GR('wash')} x={600} y={250} w={150} h={72} rot={30} />
-          <path d="M545 220 Q505 260 480 365" stroke="rgba(120,190,235,0.85)" strokeWidth="4" fill="none" strokeDasharray="10 6" />
+          {/* Squeezed with the nozzle end tipped down: the photo is mirrored so the bent nozzle points down
+              and the water falls onto the slide with gravity. */}
+          <g transform={`translate(${WASH.x} ${WASH.y}) rotate(${WASH.rot}) scale(1 -1)`}><Sprite src={GR('wash')} x={0} y={0} w={150} h={72} shadow={false} /></g>
+          {/* The stream leaves the nozzle tip and falls in a curve onto the smear. */}
+          <path d={`M${WASH_TIP.x} ${WASH_TIP.y} Q${WASH_TIP.x - 18} ${WASH_TIP.y + 30} 470 360`} stroke="rgba(120,190,235,0.9)" strokeWidth="4" strokeLinecap="round" fill="none" strokeDasharray="10 6">
+            <animate attributeName="stroke-dashoffset" from="32" to="0" dur="0.4s" repeatCount="indefinite" />
+          </path>
         </g>
       )}
 

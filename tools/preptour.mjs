@@ -6,7 +6,7 @@ const n = Number(phase.slice(1))
 const phases = Object.fromEntries([...Array(n)].map((_, i) => [`p${i}`, { done: true }]))
 phases[phase] = { section }
 const b = await chromium.launch()
-const p = await b.newPage({ viewport: { width: 1366, height: 768 } })
+const p = await b.newPage({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: Number(process.env.SCALE ?? 1) })
 await p.addInitScript((v) => { if (!sessionStorage.getItem('s')) { sessionStorage.setItem('s', '1'); localStorage.setItem('bio-lab:v1', v) } }, JSON.stringify({ sound: false, phases }))
 await p.goto(`http://localhost:5180/#/${phase}`); await p.waitForTimeout(1500)
 const shots = []
@@ -30,7 +30,7 @@ for (let i = 0; i < 20; i++) {
   await p.waitForTimeout(2900)
 }
 await b.close()
-const w = 410, h = 240, cols = 4, rows = Math.ceil(shots.length / cols)
+const w = Number(process.env.TILE ?? 410), h = Math.round(w * 240 / 410), cols = 4, rows = Math.ceil(shots.length / cols)
 const tiles = await Promise.all(shots.map((s) => sharp(s).resize(w, h, { fit: 'contain', background: '#fff' }).toBuffer()))
 await sharp({ create: { width: cols * (w + 6), height: rows * (h + 6), channels: 3, background: '#fff' } }).composite(tiles.map((t, i) => ({ input: t, left: (i % cols) * (w + 6), top: Math.floor(i / cols) * (h + 6) }))).png().toFile(out)
 console.log(out, shots.length, 'steps')
