@@ -1,6 +1,6 @@
 # bio-lab phase plan (approved 2026-10-25)
 
-Status: Phases 0 to 6 approved. Phase 7 built, awaiting review.
+Status: Phases 0 to 7 approved. Phase 8 built, awaiting review. All phases built.
 
 Source: `reference/lesson-4-structures-and-organelles.pdf`, UAE Inspire Science Biology G9 Advanced, Lesson 4 "Structures and Organelles", pp 55-66.
 

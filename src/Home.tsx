@@ -11,7 +11,7 @@ export const PHASES = [
   { id: 'p5', n: 5, title: 'Processing energy', pages: 'Page 61', blurb: 'Chloroplasts, coloured and starchy plastids, and living mitochondria.', ready: true },
   { id: 'p6', n: 6, title: 'Manufacturing proteins', pages: 'Pages 62 to 63', blurb: 'Ribosomes, ER and Golgi in a liver cell, and a protein shipped live.', ready: true },
   { id: 'p7', n: 7, title: 'Storage and cleanup', pages: 'Pages 63 to 64', blurb: 'Shrinking purple vacuoles, and lysosomes digesting bacteria live.', ready: true },
-  { id: 'p8', n: 8, title: 'Organelles at work', pages: 'Pages 64 to 66', blurb: 'Follow one protein through the whole cell, then your result card.', ready: false },
+  { id: 'p8', n: 8, title: 'Organelles at work', pages: 'Pages 64 to 66', blurb: 'Table 1, the cell factory, Check Your Progress, and your result card.', ready: true },
 ]
 
 export function Home() {
@@ -67,6 +67,12 @@ export function Home() {
             )
           })}
         </ol>
+        {Object.values(phases).some((ph) => ph?.done) && (
+          <a href="#/result" className="card mt-4 flex items-center justify-between text-inherit no-underline hover:border-[var(--color-primary)]">
+            <span><span className="block font-display text-xl font-bold">Your result card</span><span className="text-[var(--color-muted)]">Scores for every phase, ready to screenshot for your teacher.</span></span>
+            <span className="btn btn-primary">Open</span>
+          </a>
+        )}
       </main>
     </div>
   )

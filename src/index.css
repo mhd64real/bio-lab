@@ -435,3 +435,10 @@ button:disabled { cursor: default; }
 .ship-hit { fill: transparent; stroke: transparent; stroke-width: 4; cursor: pointer; transition: stroke 0.15s, fill 0.15s; }
 .ship-hit:hover { stroke: #f2a516; stroke-dasharray: 10 8; fill: rgba(242, 165, 22, 0.08); }
 .ship-miss { stroke: #e03131 !important; fill: rgba(224, 49, 49, 0.12) !important; }
+
+/* Result card: print only the card. */
+@media print {
+  .no-print, .topbar { display: none !important; }
+  body { background: #fff; }
+  .result-card { box-shadow: none; border: 1px solid #ccc; }
+}

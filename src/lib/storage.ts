@@ -14,6 +14,8 @@ export interface PhaseProgress {
 export interface Progress {
   sound: boolean
   phases: Record<string, PhaseProgress>
+  // Typed by the student on the result card, kept in this browser only.
+  student?: { name: string; group: string }
 }
 
 const fresh = (): Progress => ({ sound: false, phases: {} })
@@ -44,6 +46,7 @@ export const progress = {
     current = { ...current, phases: { ...current.phases, [id]: { ...current.phases[id], ...patch } } }
     save()
   },
+  setStudent(student: { name: string; group: string }) { current = { ...current, student }; save() },
   resetPhase(id: string) {
     const phases = { ...current.phases }
     delete phases[id]
