@@ -28,6 +28,7 @@
   --color-obj4: #e0474c;
   --color-obj10: #e8b10c;
   --color-obj40: #3a9fe0;
+  --color-obj100: #c8cfd8;
 
   --radius-card: 1.25rem;
   --radius-control: 0.9rem;
@@ -133,7 +134,7 @@ button:disabled { cursor: default; }
   border-radius: var(--radius-control);
   background: var(--color-surface);
   font-weight: 900;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 .ctl-obj:hover { background: var(--color-sunk); }
 .ctl-obj-on { border-color: var(--ring); background: color-mix(in srgb, var(--ring) 12%, white); }
@@ -346,3 +347,44 @@ button:disabled { cursor: default; }
   box-shadow: 0 6px 18px rgba(16, 24, 40, 0.25);
   pointer-events: none;
 }
+
+/* ---------- Prep runner ---------- */
+.prep-tray { display: flex; justify-content: center; min-height: 4.5rem; }
+.prep-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4rem;
+  padding: 0 1.4rem;
+  border-radius: var(--radius-card);
+  border: 2px solid color-mix(in srgb, var(--tool) 55%, var(--color-line));
+  border-bottom-width: 4px;
+  background: color-mix(in srgb, var(--tool) 10%, white);
+  color: color-mix(in srgb, var(--tool) 70%, var(--color-ink));
+  font-weight: 900;
+  font-size: 1.05rem;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.prep-tool:hover:not(:disabled) { background: color-mix(in srgb, var(--tool) 18%, white); }
+.prep-tool:active:not(:disabled) { border-bottom-width: 2px; transform: translateY(2px); }
+.prep-tool:disabled { opacity: 0.5; }
+
+/* ---------- Cell diagrams ---------- */
+.cell-svg { width: 100%; height: auto; max-height: 70vh; }
+.cell-part { cursor: pointer; }
+.cell-part:hover { filter: brightness(1.08); }
+.cell-part-on { filter: drop-shadow(0 0 4px #f2a516) drop-shadow(0 0 2px #f2a516); }
+.tick {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-control);
+  border: 2px solid var(--color-line);
+  background: var(--color-surface);
+  color: white;
+}
+.tick:hover { border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-line)); }
+.tick-on { background: var(--color-primary); border-color: var(--color-primary-strong); }

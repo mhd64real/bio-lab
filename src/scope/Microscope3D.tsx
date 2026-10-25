@@ -13,7 +13,7 @@ export const PART_INFO: Record<PartId, { name: string; job: string }> = {
   head: { name: 'Head', job: 'Holds the eyepieces and carries the image up from the objective.' },
   arm: { name: 'Arm', job: 'Joins the head to the base. Carry the microscope by the arm and the base.' },
   nosepiece: { name: 'Revolving nosepiece', job: 'Turns to swing a different objective over the slide. It clicks into place.' },
-  objectives: { name: 'Objective lenses', job: 'The lenses closest to the slide: 4x (red), 10x (yellow) and 40x (blue).' },
+  objectives: { name: 'Objective lenses', job: 'The lenses closest to the slide: 4x (red), 10x (yellow), 40x (blue) and 100x (white), which only works with a drop of immersion oil.' },
   stage: { name: 'Stage', job: 'The flat platform the slide sits on. Light comes up through the hole in the middle.' },
   clips: { name: 'Stage clips', job: 'Hold the slide still on the stage.' },
   stageKnobs: { name: 'Stage controls', job: 'Move the slide left, right, forward and back without touching it.' },
@@ -37,6 +37,8 @@ export interface ScopeHandlers {
   stage(dx: number, dy: number): void
   stageTap(): void
   clip(): void
+  oil(): void
+  cleanLens(): void
 }
 
 interface Ctx {
@@ -150,17 +152,17 @@ function Knob({ r, h, color, ridges = 24 }: { r: number; h: number; color: strin
 function Objectives() {
   const { state, on } = useContext(SceneCtx)
   const turret = useRef<THREE.Group>(null)
-  const target = OBJECTIVES.indexOf(state.objective) * ((Math.PI * 2) / 3)
+  const target = OBJECTIVES.indexOf(state.objective) * ((Math.PI * 2) / OBJECTIVES.length)
   useFrame((_, dt) => {
     const t = turret.current
     if (!t) return
     t.rotation.y += (-target - t.rotation.y) * Math.min(1, dt * 10)
   })
-  const len: Record<Objective, number> = { 4: 2.2, 10: 3.0, 40: 3.9 }
-  const ring: Record<Objective, string> = { 4: '#e0474c', 10: '#e8b10c', 40: '#3a9fe0' }
+  const len: Record<Objective, number> = { 4: 2.2, 10: 3.0, 40: 3.9, 100: 4.2 }
+  const ring: Record<Objective, string> = { 4: '#e0474c', 10: '#e8b10c', 40: '#3a9fe0', 100: '#f4f6f8' }
   return (
     <group position={[0, 17.2, -1.7]}>
-      <Part id="nosepiece" anchor={[-3.4, 0.4, 0]} onTap={() => on.objective(OBJECTIVES[(OBJECTIVES.indexOf(state.objective) + 1) % 3])}>
+      <Part id="nosepiece" anchor={[-3.4, 0.4, 0]} onTap={() => on.objective(OBJECTIVES[(OBJECTIVES.indexOf(state.objective) + 1) % OBJECTIVES.length])}>
         <mesh castShadow>
           <cylinderGeometry args={[2.7, 2.9, 1.2, 48]} />
           <Mat color={METAL} metal={0.7} rough={0.3} />
@@ -169,7 +171,7 @@ function Objectives() {
       <group ref={turret}>
         <Part id="objectives" anchor={[2.6, -2.6, 1.7]}>
           {OBJECTIVES.map((o, i) => {
-            const a = i * ((Math.PI * 2) / 3)
+            const a = i * ((Math.PI * 2) / OBJECTIVES.length)
             const x = Math.sin(a) * 1.7, z = Math.cos(a) * 1.7
             return (
               <group key={o} position={[x, -0.6 - len[o] / 2, z]} onClick={() => on.objective(o)}>
@@ -266,8 +268,14 @@ function Stage() {
           </mesh>
           <mesh position={[0, 0.06, 0]}>
             <boxGeometry args={[0.34, 0.01, 0.34]} />
-            <Mat color="#ece6d8" rough={0.95} />
+            <Mat color={state.mount?.specimen === 'onion' ? '#e9c873' : state.mount?.specimen === 'cheek' ? '#9cc3e6' : state.mount?.specimen === 'yogurt' ? '#b9a0d6' : '#ece6d8'} rough={0.95} />
           </mesh>
+          {state.oil && (
+            <mesh position={[0, 0.12, 0]} scale={[1, 0.25, 1]}>
+              <sphereGeometry args={[0.28, 24, 12]} />
+              <meshPhysicalMaterial color="#fff6d0" transmission={0.6} transparent opacity={0.8} roughness={0.02} />
+            </mesh>
+          )}
           {state.broken && [0.3, 1.2, 2.0, 2.9, 3.9, 5.1].map((a, i) => (
             <mesh key={a} position={[Math.cos(a) * (0.5 + (i % 2) * 0.2), 0.09, Math.sin(a) * (0.5 + (i % 2) * 0.2)]} rotation={[0, -a, 0]}>
               <boxGeometry args={[1.0 + (i % 3) * 0.3, 0.012, 0.025]} />

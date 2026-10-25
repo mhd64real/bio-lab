@@ -25,6 +25,7 @@ export function useScope(init: () => ScopeState) {
     if (!p.broken && state.broken) play('crack')
     if (p.slide !== 'clipped' && state.slide === 'clipped') play('clip')
     if (p.slide === 'none' && state.slide !== 'none') play('slide')
+    if (!p.oil && state.oil) play('drop')
     if (p.stageZ !== state.stageZ || p.stageX !== state.stageX || p.stageY !== state.stageY) play('tick')
   }, [state])
 
@@ -38,6 +39,8 @@ export function useScope(init: () => ScopeState) {
     stage: (dx, dy) => dispatch({ type: 'stage', dx, dy }),
     stageTap: () => { if (mountRef.current) dispatch({ type: 'placeSlide', mount: mountRef.current }) },
     clip: () => dispatch({ type: 'clip' }),
+    oil: () => dispatch({ type: 'oil' }),
+    cleanLens: () => dispatch({ type: 'cleanLens' }),
     place: (mount) => { mountRef.current = mount; dispatch({ type: 'placeSlide', mount }) },
     remove: () => dispatch({ type: 'removeSlide' }),
     replace: () => dispatch({ type: 'replaceSlide' }),

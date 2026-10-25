@@ -31,12 +31,15 @@ function useGuardedApi(api: ScopeApi, lock: Lock, deny: () => void): ScopeApi {
       lamp: g('lamp', api.lamp),
       brightness: g('brightness', api.brightness),
       iris: g('iris', api.iris),
-      coarse: g('coarse', api.coarse),
+      // 'coarseDown' allows lowering the stage only, which can never hit the lens.
+      coarse: (dz) => (canUse(lock, 'coarse') || (canUse(lock, 'coarseDown') && dz < 0) ? api.coarse(dz) : deny()),
       fine: g('fine', api.fine),
       stage: g('stage', api.stage),
       stageTap: g('place', api.stageTap),
       clip: g('clip', api.clip),
       remove: g('remove', api.remove),
+      oil: g('oil', api.oil),
+      cleanLens: g('clean', api.cleanLens),
       objective: (o) => (canObjective(lock, o) ? api.objective(o) : deny()),
     }
   }, [api, lock, deny])

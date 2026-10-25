@@ -116,7 +116,7 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
       </Group>
 
       <Group title="Objective lens" attention={hl('nosepiece', 'objectives')} locked={!can('objective')}>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-1.5">
           {OBJECTIVES.map((o, i) => (
             <button
               key={o} type="button"
@@ -137,12 +137,12 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
         </p>
       </Group>
 
-      <Group title="Focus" attention={hl('coarse', 'fine')} locked={!can('coarse') && !can('fine')}>
+      <Group title="Focus" attention={hl('coarse', 'fine')} locked={!can('coarse') && !can('fine') && !can('coarseDown')}>
         <div className="grid grid-cols-2 gap-2">
           <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('coarse') ? 'attention' : ''}`}>
             <span className="ctl-sub" style={{ color: 'var(--color-primary)' }}>Coarse</span>
             <HoldButton step={coarse(1)} label="Coarse focus, raise stage" kbd="PgUp" className="ctl-coarse" disabled={!can('coarse')}><ChevronUp size={20} />Up</HoldButton>
-            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className="ctl-coarse" disabled={!can('coarse')}><ChevronDown size={20} />Down</HoldButton>
+            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className="ctl-coarse" disabled={!can('coarse') && !can('coarseDown')}><ChevronDown size={20} />Down</HoldButton>
           </div>
           <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('fine') ? 'attention' : ''}`}>
             <span className="ctl-sub" style={{ color: '#2f9c82' }}>Fine</span>
@@ -173,6 +173,16 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
             <HoldButton step={move(0, -1)} label="Move slide towards you" disabled={!canMove}><ArrowDown size={20} /></HoldButton>
             <span />
           </div>
+        )}
+        {state.slide === 'clipped' && (can('oil') || state.oil) && (
+          <button type="button" disabled={!can('oil') || state.oil} className={`ctl-btn mt-2 w-full justify-center ${can('oil') && !state.oil ? 'attention' : ''}`} onClick={api.oil}>
+            {state.oil ? 'Immersion oil added' : 'Add a drop of immersion oil'}
+          </button>
+        )}
+        {(state.lensOily || can('clean')) && (
+          <button type="button" disabled={!can('clean') || !state.lensOily} className={`ctl-btn mt-2 w-full justify-center ${can('clean') && state.lensOily ? 'attention' : ''}`} onClick={api.cleanLens}>
+            {state.lensOily ? 'Wipe the 100x lens with lens paper' : '100x lens is clean'}
+          </button>
         )}
         {state.slide !== 'none' && can('remove') && (
           <button type="button" className="mt-2 w-full rounded-[var(--radius-control)] py-2 text-sm font-bold text-[var(--color-muted)] hover:bg-[var(--color-sunk)]" onClick={api.remove}>
@@ -227,6 +237,7 @@ export function useScopeKeys(state: ScopeState, api: ScopeApi, enabled = true) {
       if (e.key === '1') api.objective(4)
       if (e.key === '2') api.objective(10)
       if (e.key === '3') api.objective(40)
+      if (e.key === '4') api.objective(100)
       if (e.key === 'l' || e.key === 'L') api.lamp()
     }
     const up = (e: KeyboardEvent) => { held.current.delete(e.key) }

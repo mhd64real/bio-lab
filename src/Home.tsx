@@ -4,7 +4,7 @@ import { useProgress } from './lib/storage'
 
 export const PHASES = [
   { id: 'p0', n: 0, title: 'Lab orientation', pages: 'Before the lesson', blurb: 'Learn the microscope, prepare a slide, meet the other instruments.', ready: true },
-  { id: 'p1', n: 1, title: 'Cell structures', pages: 'Pages 55 to 56', blurb: 'Plant, animal and prokaryotic cells side by side.', ready: false },
+  { id: 'p1', n: 1, title: 'Cell structures', pages: 'Pages 55 to 56', blurb: 'Plant, animal and prokaryotic cells side by side.', ready: true },
   { id: 'p2', n: 2, title: 'Cytoskeleton and centrioles', pages: 'Pages 57 to 58', blurb: 'The framework inside the cell, live under fluorescence.', ready: false },
   { id: 'p3', n: 3, title: 'Appendages and cell walls', pages: 'Pages 58 to 59', blurb: 'Beating cilia, whipping flagella and rigid walls.', ready: false },
   { id: 'p4', n: 4, title: 'The nucleus', pages: 'Page 60', blurb: 'The control centre, sliced and seen with electrons.', ready: false },
@@ -35,26 +35,29 @@ export function Home() {
           </p>
         </section>
         <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {PHASES.map((p) => {
+          {PHASES.map((p, i) => {
             const st = phases[p.id]
+            // Phases open in order: each one needs the previous phase finished.
+            const open = p.ready && (i === 0 || !!phases[PHASES[i - 1].id]?.done)
             const done = st?.done
             const inner = (
               <>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-[var(--color-primary-soft)] font-display text-lg font-bold text-[var(--color-primary-strong)]">{p.n}</span>
-                  {done ? <CheckCircle2 className="text-[var(--color-ok)]" /> : !p.ready ? <Lock size={18} className="text-[var(--color-faint)]" /> : null}
+                  {done ? <CheckCircle2 className="text-[var(--color-ok)]" /> : !open ? <Lock size={18} className="text-[var(--color-faint)]" /> : null}
                 </div>
                 <div className="font-display text-xl font-bold leading-tight">{p.title}</div>
                 <div className="mb-1 text-sm font-bold text-[var(--color-primary)]">{p.pages}</div>
                 <p className="leading-snug text-[var(--color-muted)]">{p.blurb}</p>
                 {done && st?.score && <p className="mt-2 text-sm font-extrabold">Score {st.score.got} / {st.score.total}</p>}
                 {!p.ready && <p className="mt-2 text-sm font-bold text-[var(--color-faint)]">Coming soon</p>}
-                {p.ready && !done && st?.section && st.section !== 'welcome' && <p className="mt-2 text-sm font-extrabold text-[var(--color-accent)]">In progress</p>}
+                {p.ready && !open && <p className="mt-2 text-sm font-bold text-[var(--color-faint)]">Finish Phase {p.n - 1} first</p>}
+                {open && !done && st?.section && st.section !== 'welcome' && <p className="mt-2 text-sm font-extrabold text-[var(--color-accent)]">In progress</p>}
               </>
             )
             return (
               <li key={p.id}>
-                {p.ready ? (
+                {open ? (
                   <a href={`#/${p.id}`} className="card block h-full text-inherit no-underline hover:border-[var(--color-primary)]">{inner}</a>
                 ) : (
                   <div className="card h-full opacity-70">{inner}</div>

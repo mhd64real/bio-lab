@@ -1,7 +1,7 @@
 // Developer page for tuning the optics: #/dev/optics?obj=40&z=15000&x=0&y=0
 import { useReducer } from 'react'
 import { OpticalView } from '../scope/OpticalView'
-import { initialScope, scopeReducer, focusHeight, type Objective } from '../scope/model'
+import { initialScope, scopeReducer, focusHeight, type Objective, type SpecimenId } from '../scope/model'
 
 export function OpticsLab() {
   const q = new URLSearchParams(location.hash.split('?')[1] ?? '')
@@ -17,7 +17,8 @@ export function OpticsLab() {
     stageY: Number(q.get('y') ?? 0),
     slide: q.get('slide') === '0' ? 'none' as const : 'clipped' as const,
     broken: q.get('broken') === '1',
-    mount: { specimen: 'letter-e' as const, bubbles: q.get('bubbles') === '1' ? [{ x: 0.9, y: 0.6, r: 0.35 }, { x: -1.1, y: -0.4, r: 0.18 }] : [] },
+    oil: q.get('oil') !== '0',
+    mount: { specimen: (q.get('sp') ?? 'letter-e') as SpecimenId, variant: Number(q.get('var') ?? 0), bubbles: q.get('bubbles') === '1' ? [{ x: 0.9, y: 0.6, r: 0.35 }, { x: -1.1, y: -0.4, r: 0.18 }] : [] },
   }
   const [s] = useReducer(scopeReducer, init)
   return (

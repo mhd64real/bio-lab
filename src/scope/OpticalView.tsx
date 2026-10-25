@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NOISE } from './glsl'
 import { EMPTY, SPECIMENS, type SpecimenDef } from './specimens'
-import { optics, type ScopeState } from './model'
+import { blurAt, optics, type ScopeState } from './model'
 
 const VERT = /* glsl */ `#version 300 es
 in vec2 aPos;
@@ -20,11 +20,16 @@ uniform float uBroken;
 uniform vec2 uCrackAt;
 uniform vec3 uBubbles[8];
 uniform int uBubbleCount;
-out vec4 outColor;
+uniform float uVariant;
+uniform float uSeed;
+layout(location = 0) out vec4 outLayer0;
+layout(location = 1) out vec4 outLayer1;
 ${NOISE}
 float gPx; // slide millimetres per pixel, for anti-aliasing fine detail
 ${def.helpers}
-vec3 specimen(vec2 s) {
+// t0: the main focal plane. t1: a second plane (e.g. a nucleus) at the specimen's layer depth.
+void specimen(vec2 s, out vec3 t0, out vec3 t1) {
+  t1 = vec3(1.0);
 ${def.body}
 }
 void main() {
@@ -46,7 +51,8 @@ void main() {
     crack = max(crack, (1.0 - smoothstep(0.0, max(0.02, gPx * 14.0), vo.y - vo.x)) * smoothstep(0.35, 0.1, r));
     s += (hash22(floor(vec2(a * 1.43, r * 4.0))) - 0.5) * 0.02 * smoothstep(1.0, 0.0, r);
   }
-  vec3 t = specimen(s);
+  vec3 t, t1;
+  specimen(s, t, t1);
   for (int i = 0; i < 8; i++) {
     if (i >= uBubbleCount) break;
     vec3 b = uBubbles[i];
@@ -60,7 +66,8 @@ void main() {
     }
   }
   t = mix(t, vec3(0.05), crack * 0.9);
-  outColor = vec4(clamp(t, 0.0, 1.0), 1.0);
+  outLayer0 = vec4(clamp(t, 0.0, 1.0), 1.0);
+  outLayer1 = vec4(clamp(t1, 0.0, 1.0), 1.0);
 }
 `
 }
@@ -69,13 +76,30 @@ const OPTICS_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform vec2 uRes;
 uniform sampler2D uSharp;
+uniform sampler2D uSharp1;
 uniform float uBlur;
+uniform float uBlur1;
+uniform float uHasLayer1;
 uniform float uLight;
 uniform float uContrast;
 uniform float uGlare;
 uniform float uSeed;
 out vec4 outColor;
 ${NOISE}
+vec3 defocus(sampler2D tex, vec2 uv, float R) {
+  if (R < 0.6) return texture(tex, uv).rgb;
+  const int N = 32;
+  float lod = log2(max(1.0, R * 1.7 / sqrt(float(N))));
+  vec3 acc = vec3(0.0);
+  float rot = hash12(gl_FragCoord.xy) * 6.2831;
+  for (int i = 0; i < N; i++) {
+    float fi = float(i);
+    float rr = sqrt((fi + 0.5) / float(N)) * R;
+    float th = fi * 2.39996 + rot;
+    acc += textureLod(tex, uv + vec2(cos(th), sin(th)) * rr / uRes, lod).rgb;
+  }
+  return acc / float(N);
+}
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   float scale = 0.5 * min(uRes.x, uRes.y);
@@ -83,25 +107,9 @@ void main() {
   float r = length(v);
   if (r > 1.0) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
 
-  // Defocus: a disc blur, sampled from a coarser mip level as the disc grows.
-  float R = uBlur * 2.0 * scale;
-  vec3 t;
-  if (R < 0.6) {
-    t = texture(uSharp, uv).rgb;
-  } else {
-    const int N = 32;
-    float lod = log2(max(1.0, R * 1.7 / sqrt(float(N))));
-    vec3 acc = vec3(0.0);
-    float rot = hash12(gl_FragCoord.xy) * 6.2831;
-    for (int i = 0; i < N; i++) {
-      float fi = float(i);
-      float rr = sqrt((fi + 0.5) / float(N)) * R;
-      float th = fi * 2.39996 + rot;
-      vec2 o = vec2(cos(th), sin(th)) * rr / uRes;
-      acc += textureLod(uSharp, uv + o, lod).rgb;
-    }
-    t = acc / float(N);
-  }
+  // Defocus: a disc blur per specimen plane, sampled from a coarser mip level as the disc grows.
+  vec3 t = defocus(uSharp, uv, uBlur * 2.0 * scale);
+  if (uHasLayer1 > 0.5) t *= defocus(uSharp1, uv, uBlur1 * 2.0 * scale);
 
   // Light from a cool white LED, through the specimen.
   vec3 I = t * uLight * vec3(1.0, 0.985, 0.95);
@@ -187,19 +195,22 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
 
   // Off-screen targets for the sharp specimen, with mipmaps for the blur pass.
   // A reduced-resolution target is used while the student is moving a control.
-  const makeTarget = () => ({ tex: gl.createTexture()!, fbo: gl.createFramebuffer()!, w: 1, h: 1 })
+  const makeTarget = () => ({ tex: gl.createTexture()!, tex1: gl.createTexture()!, fbo: gl.createFramebuffer()!, w: 1, h: 1 })
   const full = makeTarget(), low = makeTarget()
   let w = 1, h = 1
   const allocate = (t: ReturnType<typeof makeTarget>, tw: number, th: number) => {
     t.w = tw; t.h = th
-    gl.bindTexture(gl.TEXTURE_2D, t.tex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, tw, th, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t.tex, 0)
+    ;[t.tex, t.tex1].forEach((tex, i) => {
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, tw, th, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, tex, 0)
+    })
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1])
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
   const allocateAll = () => {
@@ -236,12 +247,19 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       bubbles.forEach((b, i) => arr.set([b.x, b.y, b.r], i * 3))
       gl.uniform3fv(prog.uni('uBubbles'), arr)
       gl.uniform1i(prog.uni('uBubbleCount'), bubbles.length)
+      gl.uniform1f(prog.uni('uVariant'), s.mount?.variant ?? 0)
+      gl.uniform1f(prog.uni('uSeed'), 0)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.uniform1i(prog.uni('uTex'), 0)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      const layered = def.layerZ !== undefined
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, target.tex1)
+      if (layered) gl.generateMipmap(gl.TEXTURE_2D)
+      gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, target.tex)
       gl.generateMipmap(gl.TEXTURE_2D)
       gl.viewport(0, 0, w, h)
@@ -249,7 +267,10 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       const u = opticsProg.uni
       gl.uniform2f(u('uRes'), w, h)
       gl.uniform1i(u('uSharp'), 0)
+      gl.uniform1i(u('uSharp1'), 1)
       gl.uniform1f(u('uBlur'), o.blur)
+      gl.uniform1f(u('uBlur1'), layered ? blurAt(s, def.layerZ ?? 0) : 0)
+      gl.uniform1f(u('uHasLayer1'), layered ? 1 : 0)
       gl.uniform1f(u('uLight'), o.light)
       gl.uniform1f(u('uContrast'), o.contrast)
       gl.uniform1f(u('uGlare'), o.glare)
@@ -261,7 +282,7 @@ function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       programs.forEach(({ p }) => gl.deleteProgram(p))
       textures.forEach((t) => gl.deleteTexture(t))
       gl.deleteProgram(opticsProg.p)
-      for (const t of [full, low]) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo) }
+      for (const t of [full, low]) { gl.deleteTexture(t.tex); gl.deleteTexture(t.tex1); gl.deleteFramebuffer(t.fbo) }
       gl.deleteBuffer(quad)
     },
   }

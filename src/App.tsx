@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { OpticsLab } from './dev/OpticsLab'
 import { Home } from './Home'
 import { Phase0 } from './phases/p0/Phase0'
+import { Phase1 } from './phases/p1/Phase1'
+import { progress } from './lib/storage'
 
 function useHash() {
   const [hash, setHash] = useState(location.hash)
@@ -17,5 +19,7 @@ export function App() {
   const hash = useHash()
   if (hash.startsWith('#/dev/optics')) return <OpticsLab key={hash} />
   if (hash.startsWith('#/p0')) return <Phase0 />
+  // A phase opened by link still needs the one before it finished.
+  if (hash.startsWith('#/p1')) return progress.get().phases.p0?.done ? <Phase1 /> : <Home />
   return <Home />
 }

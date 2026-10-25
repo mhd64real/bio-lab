@@ -1,7 +1,7 @@
 // Which controls the student may use right now. Guided steps unlock only what the step needs.
 import type { Objective } from './model'
 
-export type Allow = 'lamp' | 'brightness' | 'iris' | 'objective' | 'coarse' | 'fine' | 'stage' | 'place' | 'clip' | 'remove'
+export type Allow = 'lamp' | 'brightness' | 'iris' | 'objective' | 'coarse' | 'fine' | 'stage' | 'place' | 'clip' | 'remove' | 'oil' | 'clean' | 'coarseDown'
 
 export interface Lock {
   allow: Allow[] | 'all'
