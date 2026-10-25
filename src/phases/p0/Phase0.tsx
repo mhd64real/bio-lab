@@ -8,12 +8,13 @@ import { PrepBench } from './PrepBench'
 import { Observe } from './Observe'
 import { Instruments } from './Instruments'
 import { Check } from './Check'
+import { FreePractice } from './FreePractice'
 
-const SECTIONS = ['welcome', 'parts', 'prep', 'observe', 'instruments', 'check', 'done'] as const
+const SECTIONS = ['welcome', 'parts', 'prep', 'observe', 'instruments', 'check', 'done', 'practice'] as const
 type Section = (typeof SECTIONS)[number]
 const NAMES: Record<Section, string> = {
   welcome: 'Welcome', parts: 'Meet the microscope', prep: 'Prepare a slide', observe: 'Use the microscope',
-  instruments: 'Other microscopes', check: 'Quick check', done: 'Finished',
+  instruments: 'Other microscopes', check: 'Quick check', done: 'Finished', practice: 'Free practice',
 }
 
 function Welcome({ onStart }: { onStart: () => void }) {
@@ -47,7 +48,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
   )
 }
 
-function Done({ score, onRestart }: { score?: { got: number; total: number }; onRestart: () => void }) {
+function Done({ score, onRestart, onPractice }: { score?: { got: number; total: number }; onRestart: () => void; onPractice: () => void }) {
   return (
     <div className="mx-auto grid max-w-2xl gap-4 p-4">
       <div className="card text-center">
@@ -57,6 +58,7 @@ function Done({ score, onRestart }: { score?: { got: number; total: number }; on
         <p className="mb-5 text-lg leading-relaxed text-[var(--color-muted)]">You can now use the light microscope on your own. Phase 1 starts the lesson itself.</p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button variant="ghost" onClick={onRestart}><RotateCcw size={18} /> Do it again</Button>
+          <Button variant="soft" onClick={onPractice}><Microscope size={18} /> Free practice</Button>
           <a href="#/" className="btn btn-primary">Back to phases</a>
         </div>
       </div>
@@ -81,8 +83,8 @@ export function Phase0() {
     <div className="flex min-h-full flex-col lg:h-full">
       <TopBar
         title="Phase 0: Lab orientation"
-        sub={`${NAMES[current]} (${Math.min(index + 1, 6)} of 6)`}
-        right={current !== 'welcome' && current !== 'done' ? (
+        sub={current === 'practice' ? NAMES[current] : `${NAMES[current]} (${Math.min(index + 1, 6)} of 6)`}
+        right={current !== 'welcome' && current !== 'done' && current !== 'practice' ? (
           <button type="button" className="icon-btn" onClick={() => { if (confirm('Restart the orientation from the beginning?')) { progress.resetPhase('p0'); setMount(null); go('welcome') } }}>
             <RotateCcw size={18} /><span className="hidden md:inline">Restart</span>
           </button>
@@ -95,7 +97,8 @@ export function Phase0() {
         {current === 'observe' && mount && <Observe mount={mount} onStep={(i) => progress.updatePhase('p0', { step: i })} onDone={() => go('instruments')} />}
         {current === 'instruments' && <Instruments onDone={() => go('check')} />}
         {current === 'check' && <Check onDone={(got, total) => { progress.updatePhase('p0', { score: { got, total }, done: true }); go('done') }} />}
-        {current === 'done' && <Done score={saved?.score} onRestart={() => { progress.resetPhase('p0'); setMount(null); go('welcome') }} />}
+        {current === 'done' && <Done score={saved?.score} onRestart={() => { progress.resetPhase('p0'); setMount(null); go('welcome') }} onPractice={() => go('practice')} />}
+        {current === 'practice' && saved?.done && <FreePractice onBack={() => go('done')} />}
       </main>
     </div>
   )

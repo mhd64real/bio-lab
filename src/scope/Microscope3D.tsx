@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { ContactShadows, Environment, Html, Lightformer, OrbitControls, RoundedBox } from '@react-three/drei'
+import { ContactShadows, Environment, Lightformer, OrbitControls, RoundedBox } from '@react-three/drei'
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { OBJECTIVES, STAGE_MAX, type Objective, type ScopeState } from './model'
@@ -46,6 +46,8 @@ interface Ctx {
   labels: boolean
   onPart?: (p: PartId) => void
   setOrbit(enabled: boolean): void
+  // DOM label elements drawn over the canvas, positioned each frame from the 3D anchors.
+  labelEls: React.RefObject<Partial<Record<PartId, HTMLDivElement | null>>>
 }
 const SceneCtx = createContext<Ctx>(null!)
 
@@ -87,13 +89,20 @@ function useDrag(onDelta: (dx: number, dy: number) => void, onTap?: () => void) 
 }
 
 // Wraps a part: tap to learn its name, glow when the guide points at it, show a label.
+const tmp = new THREE.Vector3()
+
 function Part({ id, children, anchor, onTap }: { id: PartId; children: ReactNode; anchor: [number, number, number]; onTap?: () => void }) {
-  const { highlight, labels, onPart } = useContext(SceneCtx)
+  const { highlight, onPart, labelEls } = useContext(SceneCtx)
   const group = useRef<THREE.Group>(null)
   const lit = highlight.has(id)
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera, size }) => {
     const g = group.current
     if (!g) return
+    const el = labelEls.current?.[id]
+    if (el) {
+      tmp.set(...anchor).applyMatrix4(g.matrixWorld).project(camera)
+      el.style.transform = `translate(-50%, -50%) translate(${((tmp.x + 1) / 2) * size.width}px, ${((1 - tmp.y) / 2) * size.height}px)`
+    }
     const k = lit ? 0.35 + 0.3 * Math.sin(clock.elapsedTime * 5) : 0
     g.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined
@@ -111,10 +120,6 @@ function Part({ id, children, anchor, onTap }: { id: PartId; children: ReactNode
       onPointerOut={() => { document.body.style.cursor = '' }}
     >
       {children}
-      {/* Kept mounted and hidden with CSS: unmounting drei Html under React 19 throws. */}
-      <Html position={anchor} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none', display: labels || lit ? 'block' : 'none' }}>
-        <div className={`part-label ${lit ? 'part-label-lit' : ''}`}>{PART_INFO[id].name}</div>
-      </Html>
     </group>
   )
 }
@@ -431,11 +436,13 @@ export interface Microscope3DProps {
 export function Microscope3D({ state, on, highlight = [], labels = false, onPart }: Microscope3DProps) {
   const orbit = useRef<React.ComponentRef<typeof OrbitControls>>(null)
   const hl = useMemo(() => new Set(highlight), [highlight.join()])
+  const labelEls = useRef<Partial<Record<PartId, HTMLDivElement | null>>>({})
   const ctx: Ctx = {
-    state, on, highlight: hl, labels, onPart,
+    state, on, highlight: hl, labels, onPart, labelEls,
     setOrbit: (v) => { if (orbit.current) orbit.current.enabled = v },
   }
   return (
+    <div className="relative h-full w-full">
     <Canvas shadows dpr={[1, 2]} camera={{ position: [38, 18, 46], fov: 34 }} style={{ touchAction: 'none' }}>
       <SceneCtx.Provider value={ctx}>
         <FitCamera />
@@ -455,5 +462,18 @@ export function Microscope3D({ state, on, highlight = [], labels = false, onPart
         <OrbitControls ref={orbit} target={[0, 1.5, 0]} enablePan={false} enableZoom={false} minPolarAngle={0.6} maxPolarAngle={1.45} minAzimuthAngle={-0.4} maxAzimuthAngle={1.5} />
       </SceneCtx.Provider>
     </Canvas>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {(Object.keys(PART_INFO) as PartId[]).map((id) => (
+          <div
+            key={id}
+            ref={(el) => { labelEls.current[id] = el }}
+            className={`part-label absolute left-0 top-0 ${hl.has(id) ? 'part-label-lit' : ''}`}
+            style={{ display: labels || hl.has(id) ? 'block' : 'none' }}
+          >
+            {PART_INFO[id].name}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

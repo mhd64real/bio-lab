@@ -322,3 +322,27 @@ button:disabled { cursor: default; }
   .station.prep { grid-template-columns: 1fr; grid-template-areas: 'bench' 'guide'; }
   .prep-bench { height: min(60vh, 560px); }
 }
+
+/* ---------- Locked controls ---------- */
+.ctl-locked { opacity: 0.45; }
+.ctl-group-locked { background: var(--color-sunk); }
+.ctl-obj:disabled { opacity: 0.4; cursor: not-allowed; }
+.ctl-obj:disabled:hover { background: var(--color-surface); }
+.ctl-btn:disabled { cursor: not-allowed; }
+.ctl-range:disabled::-webkit-slider-thumb { border-color: var(--color-faint); }
+.lock-toast {
+  position: absolute;
+  left: 50%;
+  top: 0.75rem;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100% - 2rem);
+  padding: 0.5rem 0.9rem;
+  border-radius: 99px;
+  background: var(--color-ink);
+  color: white;
+  font-weight: 800;
+  font-size: 0.92rem;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.25);
+  pointer-events: none;
+}

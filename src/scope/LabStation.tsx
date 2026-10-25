@@ -1,10 +1,12 @@
-import { Suspense, useRef, type ReactNode } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Lock as LockIcon } from 'lucide-react'
 import { Eye, Tags } from 'lucide-react'
 import { OpticalView } from './OpticalView'
 import { Microscope3D, type PartId } from './Microscope3D'
 import { Controls, useScopeKeys } from './Controls'
 import { describeView, OBJECTIVE_INFO, type ScopeState } from './model'
 import type { ScopeApi } from './useScope'
+import { canObjective, canUse, UNLOCKED, type Allow, type Lock } from './lock'
 
 export interface LabStationProps {
   state: ScopeState
@@ -16,20 +18,57 @@ export interface LabStationProps {
   onPart?: (p: PartId) => void
   holdingSlide?: boolean
   showView?: boolean
+  lock?: Lock
+  lockedMessage?: string
 }
 
-export function LabStation({ state, api, guide, highlight = [], labels = false, onToggleLabels, onPart, holdingSlide = false, showView = true }: LabStationProps) {
+// Wraps the microscope so locked controls do nothing, wherever they are touched: buttons, 3D model or keyboard.
+function useGuardedApi(api: ScopeApi, lock: Lock, deny: () => void): ScopeApi {
+  return useMemo(() => {
+    const g = <A extends unknown[]>(k: Allow, f: (...a: A) => void) => (...a: A) => (canUse(lock, k) ? f(...a) : deny())
+    return {
+      ...api,
+      lamp: g('lamp', api.lamp),
+      brightness: g('brightness', api.brightness),
+      iris: g('iris', api.iris),
+      coarse: g('coarse', api.coarse),
+      fine: g('fine', api.fine),
+      stage: g('stage', api.stage),
+      stageTap: g('place', api.stageTap),
+      clip: g('clip', api.clip),
+      remove: g('remove', api.remove),
+      objective: (o) => (canObjective(lock, o) ? api.objective(o) : deny()),
+    }
+  }, [api, lock, deny])
+}
+
+export function LabStation({ state, api: rawApi, guide, highlight = [], labels = false, onToggleLabels, onPart, holdingSlide = false, showView = true, lock = UNLOCKED, lockedMessage = 'Not yet. Follow the current step.' }: LabStationProps) {
+  const [toast, setToast] = useState(false)
+  const toastTimer = useRef(0)
+  const deny = useMemo(() => () => {
+    if (!lockedMessage) return
+    setToast(true)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(false), 1800)
+  }, [lockedMessage])
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
+  // Steps build a new lock object each render; keep one per distinct value so held keys are not dropped.
+  const lockKey = JSON.stringify(lock)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableLock = useMemo(() => lock, [lockKey])
+  const api = useGuardedApi(rawApi, stableLock, deny)
   useScopeKeys(state, api)
   const view = describeView(state)
   const wheelAcc = useRef(0)
   const tone = view.tone === 'ok' ? 'var(--color-ok)' : view.tone === 'warn' ? 'var(--color-accent)' : 'var(--color-danger)'
 
   return (
-    <div className="station">
+    <div className="station relative">
+      {toast && <div className="lock-toast flex items-center gap-2" role="status"><LockIcon size={16} /> {lockedMessage}</div>}
       <aside className="station-guide">
         <div className="station-guide-card">{guide}</div>
         <div className="station-controls">
-          <Controls state={state} api={api} highlight={highlight} holdingSlide={holdingSlide} />
+          <Controls state={state} api={api} highlight={highlight} holdingSlide={holdingSlide} lock={stableLock} />
         </div>
       </aside>
 

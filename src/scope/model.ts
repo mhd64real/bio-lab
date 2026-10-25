@@ -197,7 +197,7 @@ export function describeView(s: ScopeState): { tone: 'bad' | 'warn' | 'ok'; text
   if (s.iris < 0.08) return { tone: 'bad', text: 'Very dark and grainy. The iris diaphragm is almost closed.' }
   if (Math.abs(o.defocus) > OBJECTIVE_INFO[s.objective].dof * 40) return { tone: 'warn', text: 'Only a smooth blur of light. The slide is far out of focus.' }
   if (o.blur > 0.012) return { tone: 'warn', text: 'Blurry shapes. The slide is not in focus yet.' }
-  if (o.blur > 0.003) return { tone: 'warn', text: 'Nearly sharp. A little fine focus will finish it.' }
+  if (o.blur > 0.004) return { tone: 'warn', text: 'Nearly sharp. A little fine focus will finish it.' }
   if (o.glare > 0.18) return { tone: 'warn', text: 'Sharp but washed out. Close the iris diaphragm a little for more contrast.' }
   if (o.light > 1.05) return { tone: 'warn', text: 'Sharp but too bright to see detail. Turn the brightness down.' }
   if (o.light < 0.2) return { tone: 'warn', text: 'Sharp but dim. Turn the brightness up or open the iris.' }

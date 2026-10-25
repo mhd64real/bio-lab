@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Power } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Lock as LockIcon, Power } from 'lucide-react'
 import { OBJECTIVES, OBJECTIVE_INFO, type ScopeState } from './model'
 import type { ScopeApi } from './useScope'
 import type { PartId } from './Microscope3D'
+import { canObjective, canUse, UNLOCKED, type Lock } from './lock'
 
 // Speeds ramp up the longer a control is held, so a short tap makes a small move.
 const ramp = (held: number, full: number) => Math.min(1, held / full) ** 2
@@ -51,9 +52,9 @@ function HoldButton({ step, label, children, kbd, className = '', disabled }: { 
   )
 }
 
-function Slider({ value, onChange, label, colour, attention }: { value: number; onChange: (v: number) => void; label: string; colour: string; attention?: boolean }) {
+function Slider({ value, onChange, label, colour, attention, disabled }: { value: number; onChange: (v: number) => void; label: string; colour: string; attention?: boolean; disabled?: boolean }) {
   return (
-    <label className={`block rounded-[var(--radius-control)] ${attention ? 'attention' : ''}`}>
+    <label className={`block rounded-[var(--radius-control)] ${attention ? 'attention' : ''} ${disabled ? 'ctl-locked' : ''}`}>
       <span className="flex items-baseline justify-between text-sm font-bold text-[var(--color-muted)]">
         {label}
         <span className="tabular-nums text-[var(--color-ink)]">{Math.round(value * 100)}%</span>
@@ -62,6 +63,7 @@ function Slider({ value, onChange, label, colour, attention }: { value: number; 
         type="range" min={0} max={100} step={1}
         value={Math.round(value * 100)}
         onChange={(e) => onChange(Number(e.target.value) / 100)}
+        disabled={disabled}
         className="ctl-range mt-1 w-full"
         style={{ ['--fill' as string]: `${value * 100}%`, ['--tint' as string]: colour }}
       />
@@ -69,13 +71,13 @@ function Slider({ value, onChange, label, colour, attention }: { value: number; 
   )
 }
 
-function Group({ title, children, attention }: { title: string; children: ReactNode; attention?: boolean }) {
+function Group({ title, children, attention, locked }: { title: string; children: ReactNode; attention?: boolean; locked?: boolean }) {
   const ref = useRef<HTMLElement>(null)
   // Bring the control the guide is pointing at into view when the pad is scrolled.
   useEffect(() => { if (attention) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [attention])
   return (
-    <section ref={ref} className={`ctl-group ${attention ? 'attention' : ''}`}>
-      <h3 className="ctl-title">{title}</h3>
+    <section ref={ref} className={`ctl-group ${attention ? 'attention' : ''} ${locked ? 'ctl-group-locked' : ''}`}>
+      <h3 className="ctl-title flex items-center gap-1.5">{title}{locked && <LockIcon size={14} className="text-[var(--color-faint)]" aria-label="Locked for this step" />}</h3>
       {children}
     </section>
   )
@@ -86,10 +88,12 @@ export interface ControlsProps {
   api: ScopeApi
   highlight?: PartId[]
   holdingSlide: boolean
+  lock?: Lock
 }
 
-export function Controls({ state, api, highlight = [], holdingSlide }: ControlsProps) {
+export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLOCKED }: ControlsProps) {
   const hl = (...ids: PartId[]) => ids.some((i) => highlight.includes(i))
+  const can = (k: Parameters<typeof canUse>[1]) => canUse(lock, k)
   const fov = OBJECTIVE_INFO[state.objective].fov
   const coarse = (dir: number) => (dt: number, held: number) => api.coarse(dir * (500 + 2600 * ramp(held, 1.6)) * dt)
   const fine = (dir: number) => (dt: number, held: number) => api.fine(dir * (2.5 + 110 * ramp(held, 3)) * dt)
@@ -97,21 +101,21 @@ export function Controls({ state, api, highlight = [], holdingSlide }: ControlsP
     const v = fov * (0.25 + 0.9 * ramp(held, 1.5)) * dt
     api.stage(dx * v, dy * v)
   }
-  const canMove = state.slide === 'clipped'
+  const canMove = state.slide === 'clipped' && can('stage')
 
   return (
     <div className="ctl-pad">
-      <Group title="Light" attention={hl('power', 'brightness', 'iris', 'lamp')}>
-        <button type="button" className={`ctl-btn w-full justify-center ${state.lampOn ? 'ctl-on' : ''} ${hl('power') ? 'attention' : ''}`} onClick={api.lamp} aria-pressed={state.lampOn}>
+      <Group title="Light" attention={hl('power', 'brightness', 'iris', 'lamp')} locked={!can('lamp') && !can('brightness') && !can('iris')}>
+        <button type="button" disabled={!can('lamp')} className={`ctl-btn w-full justify-center ${state.lampOn ? 'ctl-on' : ''} ${hl('power') ? 'attention' : ''}`} onClick={api.lamp} aria-pressed={state.lampOn}>
           <Power size={20} /> {state.lampOn ? 'Lamp on' : 'Lamp off'} <span className="kbd ml-1">L</span>
         </button>
         <div className="mt-2 grid gap-1">
-          <Slider label="Brightness" value={state.brightness} onChange={api.brightness} colour="var(--color-accent)" attention={hl('brightness')} />
-          <Slider label="Iris diaphragm" value={state.iris} onChange={api.iris} colour="var(--color-accent)" attention={hl('iris')} />
+          <Slider label="Brightness" value={state.brightness} onChange={api.brightness} colour="var(--color-accent)" attention={hl('brightness')} disabled={!can('brightness')} />
+          <Slider label="Iris diaphragm" value={state.iris} onChange={api.iris} colour="var(--color-accent)" attention={hl('iris')} disabled={!can('iris')} />
         </div>
       </Group>
 
-      <Group title="Objective lens" attention={hl('nosepiece', 'objectives')}>
+      <Group title="Objective lens" attention={hl('nosepiece', 'objectives')} locked={!can('objective')}>
         <div className="grid grid-cols-3 gap-2">
           {OBJECTIVES.map((o, i) => (
             <button
@@ -119,6 +123,7 @@ export function Controls({ state, api, highlight = [], holdingSlide }: ControlsP
               className={`ctl-obj ${state.objective === o ? 'ctl-obj-on' : ''}`}
               style={{ ['--ring' as string]: OBJECTIVE_INFO[o].colour }}
               onClick={() => api.objective(o)}
+              disabled={!canObjective(lock, o) && state.objective !== o}
               aria-pressed={state.objective === o}
             >
               <span className="ctl-ring" />
@@ -132,29 +137,29 @@ export function Controls({ state, api, highlight = [], holdingSlide }: ControlsP
         </p>
       </Group>
 
-      <Group title="Focus" attention={hl('coarse', 'fine')}>
+      <Group title="Focus" attention={hl('coarse', 'fine')} locked={!can('coarse') && !can('fine')}>
         <div className="grid grid-cols-2 gap-2">
           <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('coarse') ? 'attention' : ''}`}>
             <span className="ctl-sub" style={{ color: 'var(--color-primary)' }}>Coarse</span>
-            <HoldButton step={coarse(1)} label="Coarse focus, raise stage" kbd="PgUp" className="ctl-coarse"><ChevronUp size={20} />Up</HoldButton>
-            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className="ctl-coarse"><ChevronDown size={20} />Down</HoldButton>
+            <HoldButton step={coarse(1)} label="Coarse focus, raise stage" kbd="PgUp" className="ctl-coarse" disabled={!can('coarse')}><ChevronUp size={20} />Up</HoldButton>
+            <HoldButton step={coarse(-1)} label="Coarse focus, lower stage" kbd="PgDn" className="ctl-coarse" disabled={!can('coarse')}><ChevronDown size={20} />Down</HoldButton>
           </div>
           <div className={`grid gap-2 rounded-[var(--radius-control)] ${hl('fine') ? 'attention' : ''}`}>
             <span className="ctl-sub" style={{ color: '#2f9c82' }}>Fine</span>
-            <HoldButton step={fine(1)} label="Fine focus, raise stage" kbd="]" className="ctl-fine"><ChevronUp size={20} />Up</HoldButton>
-            <HoldButton step={fine(-1)} label="Fine focus, lower stage" kbd="[" className="ctl-fine"><ChevronDown size={20} />Down</HoldButton>
+            <HoldButton step={fine(1)} label="Fine focus, raise stage" kbd="]" className="ctl-fine" disabled={!can('fine')}><ChevronUp size={20} />Up</HoldButton>
+            <HoldButton step={fine(-1)} label="Fine focus, lower stage" kbd="[" className="ctl-fine" disabled={!can('fine')}><ChevronDown size={20} />Down</HoldButton>
           </div>
         </div>
       </Group>
 
-      <Group title="Slide" attention={hl('stage', 'clips', 'stageKnobs')}>
+      <Group title="Slide" attention={hl('stage', 'clips', 'stageKnobs')} locked={!can('place') && !can('clip') && !can('stage') && !can('remove')}>
         {state.slide === 'none' && (
-          <button type="button" className={`ctl-btn w-full justify-center ${hl('stage') ? 'attention' : ''}`} disabled={!holdingSlide} onClick={api.stageTap}>
+          <button type="button" className={`ctl-btn w-full justify-center ${hl('stage') ? 'attention' : ''}`} disabled={!holdingSlide || !can('place')} onClick={api.stageTap}>
             {holdingSlide ? 'Place slide on stage' : 'No slide to place'}
           </button>
         )}
         {state.slide === 'loose' && (
-          <button type="button" className={`ctl-btn w-full justify-center ${hl('clips') ? 'attention' : ''}`} onClick={api.clip}>Clip the slide in</button>
+          <button type="button" disabled={!can('clip')} className={`ctl-btn w-full justify-center ${hl('clips') ? 'attention' : ''}`} onClick={api.clip}>Clip the slide in</button>
         )}
         {state.slide === 'clipped' && (
           <div className={`ctl-dpad rounded-[var(--radius-control)] ${hl('stageKnobs') ? 'attention' : ''}`}>
@@ -169,7 +174,7 @@ export function Controls({ state, api, highlight = [], holdingSlide }: ControlsP
             <span />
           </div>
         )}
-        {state.slide !== 'none' && (
+        {state.slide !== 'none' && can('remove') && (
           <button type="button" className="mt-2 w-full rounded-[var(--radius-control)] py-2 text-sm font-bold text-[var(--color-muted)] hover:bg-[var(--color-sunk)]" onClick={api.remove}>
             Take the slide off
           </button>

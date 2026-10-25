@@ -105,6 +105,7 @@ export function Observe({ mount, onStep, onDone }: { mount: Mount; onStep: (i: n
       api={api}
       guide={guide}
       highlight={crashed ? ['coarse'] : step.highlight}
+      lock={crashed ? { allow: ['coarse'] } : step.lock(state)}
       holdingSlide={state.slide === 'none'}
     />
   )

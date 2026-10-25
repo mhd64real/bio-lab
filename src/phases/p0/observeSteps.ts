@@ -2,6 +2,7 @@ import { describeView, inFocus, optics, type ScopeState } from '../../scope/mode
 import { letterInk } from '../../scope/specimens'
 import type { PartId } from '../../scope/Microscope3D'
 import type { ChoiceQ } from '../../ui/kit'
+import type { Lock } from '../../scope/lock'
 
 export interface ObserveStep {
   id: string
@@ -9,6 +10,8 @@ export interface ObserveStep {
   body: string
   tip?: string
   highlight: PartId[]
+  // The controls this step unlocks; everything else is locked.
+  lock: (s: ScopeState) => Lock
   // Done when the microscope reaches this state. Steps with a question are done when it is answered.
   done?: (s: ScopeState, seen: Set<string>) => boolean
   question?: ChoiceQ
@@ -22,6 +25,7 @@ const centred = (s: ScopeState, r: number) => Math.hypot(s.stageX, s.stageY) <= 
 export const OBSERVE_STEPS: ObserveStep[] = [
   {
     id: 'lamp',
+    lock: () => ({ allow: ['lamp'] }),
     title: 'Switch on the lamp',
     body: 'Press the power switch on the base, or the Lamp button. Light shines up from the base, through the slide, into the lenses.',
     highlight: ['power'],
@@ -29,6 +33,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'brightness',
+    lock: () => ({ allow: ['brightness'] }),
     title: 'Set the brightness',
     body: 'Turn the brightness dial to about two thirds (60 to 80%). Too bright hides detail and tires your eyes.',
     highlight: ['brightness'],
@@ -36,6 +41,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'lowest',
+    lock: () => ({ allow: ['objective'], objectives: [4] }),
     title: 'Start on the lowest power',
     body: 'Turn the revolving nosepiece until the 4x objective (red ring) clicks into place over the stage. You always start with the lowest power because it shows the widest view and is easiest to focus.',
     highlight: ['nosepiece', 'objectives'],
@@ -43,6 +49,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'place',
+    lock: () => ({ allow: ['place'] }),
     title: 'Place the slide on the stage',
     body: 'Tap the stage to put your slide down, with the coverslip facing up.',
     highlight: ['stage'],
@@ -50,6 +57,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'clip',
+    lock: () => ({ allow: ['clip'] }),
     title: 'Clip it in',
     body: 'Tap the stage clips so they hold the slide still.',
     highlight: ['clips'],
@@ -57,6 +65,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'centre',
+    lock: () => ({ allow: ['stage'] }),
     title: 'Line up the specimen',
     body: 'Look at the microscope from the side. Use the stage controls to move the slide until the paper square sits right over the light hole in the stage.',
     tip: 'You cannot see anything in the eyepiece yet. The slide is far below focus, so the view is only a smooth blur of light.',
@@ -65,6 +74,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'coarse',
+    lock: () => ({ allow: ['coarse'] }),
     title: 'Find it with coarse focus',
     body: 'Turn the coarse focus knob to raise the stage. Watch the eyepiece: a blurry letter will appear. Stop when you can see its shape.',
     tip: 'Coarse focus moves the stage a long way, fast. That is fine with the 4x objective because it sits far above the slide.',
@@ -73,6 +83,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'fine4',
+    lock: () => ({ allow: ['fine'] }),
     title: 'Sharpen with fine focus',
     body: 'Now use the fine focus knob to make the edges of the letter crisp.',
     highlight: ['fine'],
@@ -80,6 +91,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'iris',
+    lock: () => ({ allow: ['iris', 'fine'] }),
     title: 'Adjust the iris diaphragm',
     body: 'Slide the iris diaphragm lever. Closing it makes the image darker but adds contrast. Opening it fully washes the image out. Find the setting where the letter and the paper fibres both look clear.',
     highlight: ['iris'],
@@ -87,6 +99,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'orientation',
+    lock: () => ({ allow: [] }),
     title: 'Look closely at the letter',
     body: 'Compare the letter in the eyepiece with the letter on your slide.',
     highlight: [],
@@ -99,6 +112,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'direction',
+    lock: () => ({ allow: ['stage'] }),
     title: 'Move the slide',
     body: 'Hold the "move slide right" control for a moment while you watch the eyepiece.',
     highlight: ['stageKnobs'],
@@ -113,6 +127,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'centre2',
+    lock: () => ({ allow: ['stage'] }),
     title: 'Centre the letter',
     body: 'Move the slide so the letter is in the middle of the view. Anything off-centre will disappear when you zoom in, because higher power shows a smaller area.',
     highlight: ['stageKnobs'],
@@ -120,6 +135,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'ten',
+    lock: () => ({ allow: ['objective'], objectives: [10] }),
     title: 'Switch to 10x',
     body: 'Turn the nosepiece to the 10x objective (yellow ring). Microscopes are parfocal: the image stays almost in focus when you change lens.',
     highlight: ['nosepiece', 'objectives'],
@@ -127,6 +143,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'fine10',
+    lock: () => ({ allow: ['fine'] }),
     title: 'Fine focus only',
     body: 'From now on, use only the fine focus knob. The view is smaller and the letter is bigger: total magnification is 10 x 10 = 100x.',
     highlight: ['fine'],
@@ -134,6 +151,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'centre3',
+    lock: () => ({ allow: ['stage'] }),
     title: 'Pick a spot on the edge of the ink',
     body: 'Move the slide so the edge of the ink (where black meets paper) is in the centre of the view. That is where the most detail is.',
     highlight: ['stageKnobs'],
@@ -141,6 +159,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'forty',
+    lock: () => ({ allow: ['objective'], objectives: [40] }),
     title: 'Switch to 40x',
     body: 'Turn the nosepiece to the 40x objective (blue ring). This lens is long: at focus it sits only about half a millimetre above the slide.',
     highlight: ['nosepiece', 'objectives'],
@@ -148,6 +167,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'fine40',
+    lock: () => ({ allow: ['fine', 'brightness', 'iris'] }),
     title: 'Fine focus, then fix the light',
     body: 'Sharpen with the fine focus knob. At 400x less light reaches your eye, so turn the brightness up or open the iris until the view is clear. Look for the paper fibres and the way the ink soaks into them.',
     tip: 'Never use coarse focus with the 40x lens. One quick turn would push the slide into the lens and crack it.',
@@ -156,6 +176,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'fibres',
+    lock: () => ({ allow: [] }),
     title: 'What is paper made of?',
     body: 'Look at the paper next to the ink at 400x.',
     highlight: [],
@@ -168,6 +189,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
   },
   {
     id: 'putaway',
+    lock: (s) => (s.objective !== 4 ? { allow: ['objective'], objectives: [4] } : s.stageZ >= 12000 ? { allow: ['coarse'] } : s.slide !== 'none' ? { allow: ['remove'] } : { allow: ['lamp'] }),
     title: 'Put the microscope away',
     body: 'Leave it ready for the next person: turn back to 4x, lower the stage with coarse focus, take the slide off and switch off the lamp.',
     highlight: ['nosepiece', 'coarse', 'stage', 'power'],

@@ -3,6 +3,7 @@ import { CheckCircle2, Circle } from 'lucide-react'
 import { LabStation } from '../../scope/LabStation'
 import { useScope } from '../../scope/useScope'
 import { initialScope } from '../../scope/model'
+import { LOCKED } from '../../scope/lock'
 import { PART_INFO, type PartId } from '../../scope/Microscope3D'
 import { Button } from '../../ui/kit'
 import { play } from '../../lib/sound'
@@ -64,6 +65,8 @@ export function PartsTour({ onDone }: { onDone: () => void }) {
       labels={labels}
       onToggleLabels={() => setLabels(!labels)}
       onPart={learn}
+      lock={LOCKED}
+      lockedMessage=""
     />
   )
 }
