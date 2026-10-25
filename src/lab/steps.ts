@@ -3,6 +3,14 @@ import type { PartId } from '../scope/Microscope3D'
 import type { ChoiceQ } from '../ui/kit'
 import type { Lock } from '../scope/lock'
 
+// One action in an ordered list (e.g. putting the microscope away). Only the first unfinished action is unlocked.
+export interface Task {
+  text: string
+  done: (s: ScopeState) => boolean
+  lock: Lock
+  highlight: PartId[]
+}
+
 export interface ObserveStep {
   id: string
   title: string
@@ -11,6 +19,8 @@ export interface ObserveStep {
   highlight: PartId[]
   // The controls this step unlocks; everything else is locked.
   lock: (s: ScopeState) => Lock
+  // Ordered actions shown as a checklist; when set, lock, highlight and done come from it.
+  tasks?: Task[]
   // Done when the microscope reaches this state. Steps with a question are done when it is answered.
   done?: (s: ScopeState, seen: Set<string>) => boolean
   question?: ChoiceQ

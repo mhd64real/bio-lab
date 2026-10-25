@@ -52,7 +52,7 @@ await focusTo(14997.5, ']', '[', 0.6); await page.locator('input[type=range]').f
 console.log('view:', await page.locator('.station-view').innerText())
 await next()
 await page.locator('.choice', { hasText: 'long, flat fibres' }).click(); await next()
-await page.keyboard.press('1'); await hold('PageDown', 2500)
+await page.keyboard.press('1'); await page.waitForTimeout(150); await page.screenshot({ path: 'shots/putaway.png' }); await hold('PageDown', 2500)
 await page.getByRole('button', { name: 'Take the slide off' }).click(); await page.keyboard.press('l'); await page.waitForTimeout(150)
 await log('putaway')
 await page.getByRole('button', { name: 'Finish' }).click(); await page.waitForTimeout(400)

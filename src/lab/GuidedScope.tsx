@@ -7,6 +7,8 @@ import { SPECIMENS } from '../scope/specimens'
 import { Button, Choice } from '../ui/kit'
 import { play } from '../lib/sound'
 import type { ObserveStep } from './steps'
+import { currentTask } from './stepKit'
+import { Circle, CircleDot } from 'lucide-react'
 
 export interface GuidedScopeProps {
   steps: ObserveStep[]
@@ -94,6 +96,20 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
           <div>
             <h2 className="mb-2 font-display text-2xl font-bold leading-tight">{step.title}</h2>
             <p className="leading-relaxed">{step.body}</p>
+            {step.tasks && (
+              <ol className="mt-3 grid gap-1.5">
+                {step.tasks.map((t) => {
+                  const now = currentTask(step.tasks!, state) === t
+                  const ok = t.done(state)
+                  return (
+                    <li key={t.text} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 font-bold leading-snug ${now ? 'border-2 border-[var(--color-accent)] bg-[var(--color-accent-soft)]' : ok ? 'text-[var(--color-ok)]' : 'text-[var(--color-faint)]'}`}>
+                      {ok ? <CheckCircle2 size={18} className="flex-none" /> : now ? <CircleDot size={18} className="flex-none text-[#9a6400]" /> : <Circle size={18} className="flex-none" />}
+                      {now ? <span>Now: {t.text}</span> : t.text}
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
             {step.tip && (
               <p className="mt-3 flex gap-2 rounded-xl bg-[var(--color-accent-soft)] p-3 text-[0.95rem] leading-snug">
                 <Lightbulb size={18} className="mt-0.5 flex-none text-[#9a6400]" /> {step.tip}
@@ -125,7 +141,7 @@ export function GuidedScope({ steps, mount, label = 'Observe', initial = initial
       state={state}
       api={api}
       guide={guide}
-      highlight={crashed ? ['coarse'] : step.highlight}
+      highlight={crashed ? ['coarse'] : step.tasks ? (currentTask(step.tasks, state)?.highlight ?? []) : step.highlight}
       lock={crashed ? { allow: ['coarse'] } : step.lock(state)}
       holdingSlide={state.slide === 'none'}
     />

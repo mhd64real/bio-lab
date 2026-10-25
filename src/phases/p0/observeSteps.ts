@@ -1,6 +1,7 @@
 import { describeView, inFocus, optics, type ScopeState } from '../../scope/model'
 import { letterInk } from '../../scope/specimens'
 import type { ObserveStep } from '../../lab/steps'
+import { checklistStep, tasks } from '../../lab/stepKit'
 
 const centred = (s: ScopeState, r: number) => Math.hypot(s.stageX, s.stageY) <= r
 
@@ -169,14 +170,7 @@ export const OBSERVE_STEPS: ObserveStep[] = [
       explain: 'Exactly. Paper is a mat of plant fibres, mostly cellulose from wood. Cellulose is the same material that makes plant cell walls, which you will meet in Phase 3.',
     },
   },
-  {
-    id: 'putaway',
-    lock: (s) => (s.objective !== 4 ? { allow: ['objective'], objectives: [4] } : s.stageZ >= 12000 ? { allow: ['coarse'] } : s.slide !== 'none' ? { allow: ['remove'] } : { allow: ['lamp'] }),
-    title: 'Put the microscope away',
-    body: 'Leave it ready for the next person: turn back to 4x, lower the stage with coarse focus, take the slide off and switch off the lamp.',
-    highlight: ['nosepiece', 'coarse', 'stage', 'power'],
-    done: (s) => s.objective === 4 && s.stageZ < 12000 && s.slide === 'none' && !s.lampOn,
-  },
+  checklistStep('putaway', 'Put the microscope away', 'Leave it ready for the next person, in this order.', [tasks.lens4(), tasks.lower(), tasks.remove(), tasks.lampOff()]),
 ]
 
 // The ink edge is centred when the middle of the view has both ink and bare paper within 0.15 mm.

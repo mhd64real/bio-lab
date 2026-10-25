@@ -1,7 +1,28 @@
 // Reusable guided steps for a microscope station that starts with the lamp on and the 4x lens in place.
 import { describeView, inFocus, initialScope, optics, type Objective, type ScopeState } from '../scope/model'
-import type { ObserveStep } from './steps'
+import type { ObserveStep, Task } from './steps'
 import type { ChoiceQ } from '../ui/kit'
+
+// The first unfinished task of a checklist, or null when all are done.
+export const currentTask = (tasks: Task[], s: ScopeState) => tasks.find((t) => !t.done(s)) ?? null
+
+export function checklistStep(id: string, title: string, body: string, tasks: Task[]): ObserveStep {
+  return {
+    id, title, body, tasks,
+    highlight: [],
+    lock: (s) => currentTask(tasks, s)?.lock ?? { allow: [] },
+    done: (s) => tasks.every((t) => t.done(s)),
+  }
+}
+
+const T = {
+  lens4: (): Task => ({ text: 'Turn the nosepiece back to 4x', done: (s) => s.objective === 4, lock: { allow: ['objective'], objectives: [4] }, highlight: ['nosepiece', 'objectives'] }),
+  lower: (down = false): Task => ({ text: 'Lower the stage with coarse focus', done: (s) => s.stageZ < 12000, lock: { allow: [down ? 'coarseDown' : 'coarse'] }, highlight: ['coarse'] }),
+  remove: (): Task => ({ text: 'Take the slide off', done: (s) => s.slide === 'none', lock: { allow: ['remove'] }, highlight: ['stage'] }),
+  wipe: (): Task => ({ text: 'Wipe the oil off the 100x lens', done: (s) => !s.lensOily, lock: { allow: ['clean'] }, highlight: ['objectives'] }),
+  lampOff: (): Task => ({ text: 'Switch off the lamp', done: (s) => !s.lampOn, lock: { allow: ['lamp'] }, highlight: ['power'] }),
+}
+export const tasks = T
 
 const centred = (s: ScopeState, r: number) => Math.hypot(s.stageX, s.stageY) <= r
 
@@ -50,25 +71,11 @@ export const kit = {
     body: 'Swing the 40x lens aside and put one drop of immersion oil right on the smear, over the light. Oil bends light the same way glass does, so no light is lost in the gap under the 100x lens.',
     highlight: ['stage'], lock: () => ({ allow: ['oil'] }), done: (s) => s.oil,
   }),
-  putAway: (last: boolean, oil = false): ObserveStep => ({
-    id: 'putaway', title: 'Put the microscope away',
-    body: oil
-      ? 'Lower the stage, take the slide off, wipe the oil off the 100x lens with lens paper, turn back to 4x and switch off the lamp.'
-      : last ? 'Turn back to 4x, lower the stage, take the slide off and switch off the lamp.' : 'Turn back to 4x, lower the stage and take the slide off, ready for the next slide.',
-    highlight: oil ? ['coarse', 'stage', 'objectives', 'power'] : ['nosepiece', 'coarse', 'stage'],
-    lock: (s) => {
-      if (oil) {
-        if (s.stageZ >= 12000) return { allow: ['coarseDown'] }
-        if (s.slide !== 'none') return { allow: ['remove'] }
-        if (s.lensOily) return { allow: ['clean'] }
-        if (s.objective !== 4) return { allow: ['objective'], objectives: [4] }
-        return { allow: ['lamp'] }
-      }
-      if (s.objective !== 4) return { allow: ['objective'], objectives: [4] }
-      if (s.stageZ >= 12000) return { allow: ['coarse'] }
-      if (s.slide !== 'none') return { allow: ['remove'] }
-      return { allow: last ? ['lamp'] : [] }
-    },
-    done: (s) => s.objective === 4 && s.stageZ < 12000 && s.slide === 'none' && !s.lensOily && (!last || !s.lampOn),
-  }),
+  putAway: (last: boolean, oil = false): ObserveStep => checklistStep(
+    'putaway', 'Put the microscope away',
+    oil ? 'Oil comes off first: never swing another lens through the oil.' : last ? 'Leave it ready for the next person.' : 'Get it ready for the next slide.',
+    oil
+      ? [T.lower(true), T.remove(), T.wipe(), T.lens4(), T.lampOff()]
+      : [T.lens4(), T.lower(), T.remove(), ...(last ? [T.lampOff()] : [])],
+  ),
 }

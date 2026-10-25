@@ -115,7 +115,7 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
         </div>
       </Group>
 
-      <Group title="Objective lens" attention={hl('nosepiece', 'objectives')} locked={!can('objective')}>
+      <Group title="Objective lens" attention={hl('nosepiece', 'objectives')} locked={!can('objective') && !can('clean')}>
         <div className="grid grid-cols-4 gap-1.5">
           {OBJECTIVES.map((o, i) => (
             <button
@@ -132,6 +132,11 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
             </button>
           ))}
         </div>
+        {(state.lensOily || can('clean')) && (
+          <button type="button" disabled={!can('clean') || !state.lensOily} className={`ctl-btn mt-2 w-full justify-center ${can('clean') && state.lensOily ? 'attention' : ''}`} onClick={api.cleanLens}>
+            {state.lensOily ? 'Wipe the 100x lens with lens paper' : '100x lens is clean'}
+          </button>
+        )}
         <p className="mt-2 text-center text-sm text-[var(--color-muted)]">
           Total magnification <b className="text-[var(--color-ink)]">{10 * state.objective}x</b>
         </p>
@@ -179,13 +184,8 @@ export function Controls({ state, api, highlight = [], holdingSlide, lock = UNLO
             {state.oil ? 'Immersion oil added' : 'Add a drop of immersion oil'}
           </button>
         )}
-        {(state.lensOily || can('clean')) && (
-          <button type="button" disabled={!can('clean') || !state.lensOily} className={`ctl-btn mt-2 w-full justify-center ${can('clean') && state.lensOily ? 'attention' : ''}`} onClick={api.cleanLens}>
-            {state.lensOily ? 'Wipe the 100x lens with lens paper' : '100x lens is clean'}
-          </button>
-        )}
         {state.slide !== 'none' && can('remove') && (
-          <button type="button" className="mt-2 w-full rounded-[var(--radius-control)] py-2 text-sm font-bold text-[var(--color-muted)] hover:bg-[var(--color-sunk)]" onClick={api.remove}>
+          <button type="button" className={`ctl-btn mt-2 w-full justify-center ${lock.allow !== 'all' ? 'attention' : ''}`} onClick={api.remove}>
             Take the slide off
           </button>
         )}
