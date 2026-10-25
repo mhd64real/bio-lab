@@ -2,63 +2,40 @@ import { Hot, type PrepDef, type SceneProps } from '../../lab/PrepRunner'
 import { ArtStage, BlotSprite, Drip, Inset, PhotoSlide, Sprite } from '../../lab/artKit'
 import { Caption, CoverInset, mix } from '../p1/sceneKit'
 
-// The pepper and potato are drawn in code (image credits ran out); the tools are the shared photo sprites.
+// Photo sprites (public/art/p5 and shared); liquids, the peeled skin and the smear are drawn in code.
 const WATER: [number, number, number] = [150, 205, 240]
 const IODINE: [number, number, number] = [205, 145, 35]
 
 const defs = (
   <>
-    <radialGradient id="pepRed" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stopColor="#ff6a4d" /><stop offset="0.45" stopColor="#d81e10" /><stop offset="1" stopColor="#7a0806" /></radialGradient>
-    <linearGradient id="pepStem" x1="0" x2="1"><stop offset="0" stopColor="#5f8f2e" /><stop offset="1" stopColor="#2f5a14" /></linearGradient>
-    <radialGradient id="potSkin" cx="0.35" cy="0.3" r="0.85"><stop offset="0" stopColor="#d9b07a" /><stop offset="0.6" stopColor="#a87842" /><stop offset="1" stopColor="#6b4520" /></radialGradient>
-    <radialGradient id="potFace" cx="0.45" cy="0.4" r="0.7"><stop offset="0" stopColor="#fbf3d6" /><stop offset="0.8" stopColor="#efe0ad" /><stop offset="1" stopColor="#d9c288" /></radialGradient>
     <pattern id="pepCells" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="rgba(235,90,50,0.35)" /><path d="M0 0.3 H5 M0.3 0 V5" stroke="rgba(150,40,20,0.45)" strokeWidth="0.5" /></pattern>
     <pattern id="starch" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="rgba(245,240,225,0.6)" /><circle cx="2.5" cy="2.5" r="1.1" fill="rgba(255,255,255,0.9)" /></pattern>
     <pattern id="starchBlue" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="rgba(110,80,60,0.35)" /><circle cx="2.5" cy="2.5" r="1.2" fill="rgba(40,30,80,0.9)" /></pattern>
   </>
 )
 
+const P5 = (n: string) => `p5/${n}`
+
 function Pepper({ x, y }: { x: number; y: number }) {
-  return (
-    <g transform={`translate(${x} ${y})`} filter="url(#photoSh)">
-      <path d="M-70 -40 C-90 10 -75 70 -40 82 C-20 90 -8 76 0 70 C10 78 25 90 45 82 C80 68 92 10 72 -40 C60 -70 25 -62 0 -58 C-25 -62 -58 -70 -70 -40 Z" fill="url(#pepRed)" />
-      <path d="M-8 -50 C-4 0 -6 40 0 70" stroke="rgba(90,0,0,0.35)" strokeWidth="5" fill="none" />
-      <ellipse cx="-38" cy="-18" rx="10" ry="26" fill="rgba(255,255,255,0.28)" transform="rotate(14 -38 -18)" />
-      <path d="M-12 -60 C-14 -72 -6 -78 4 -76 C14 -74 16 -64 12 -58 Z" fill="#3e6d1c" />
-      <path d="M0 -74 C2 -92 12 -100 22 -104" stroke="url(#pepStem)" strokeWidth="9" strokeLinecap="round" fill="none" />
-    </g>
-  )
+  return <Sprite src={P5('pepper')} x={x} y={y} w={150} h={192} />
 }
-function PepperStrip({ x, y, rot = 0, peeled }: { x: number; y: number; rot?: number; peeled?: boolean }) {
+// The strip photo runs diagonally; rotating it by 42 degrees lays it flat.
+function PepperStrip({ x, y, rot = 0, peeled, w = 120 }: { x: number; y: number; rot?: number; peeled?: boolean; w?: number }) {
   return (
-    <g transform={`translate(${x} ${y}) rotate(${rot})`} filter="url(#photoSh)">
-      <path d="M-55 -9 C-20 -15 20 -15 55 -8 C58 0 58 6 55 10 C20 15 -20 15 -55 10 C-58 4 -58 -3 -55 -9 Z" fill="url(#pepRed)" />
-      <path d="M-50 -6 C-20 -10 20 -10 50 -5" stroke="rgba(255,255,255,0.35)" strokeWidth="2" fill="none" />
-      {peeled && <path d="M-10 -10 L14 -10 L16 9 L-12 9 Z" fill="#f2b089" />}
+    <g transform={`translate(${x} ${y}) rotate(${rot + 42})`}>
+      <Sprite src={P5('pepper-strip')} x={0} y={0} w={w} h={w * 1.08} />
+      {peeled && <ellipse cx={w * 0.06} cy={-w * 0.06} rx={w * 0.09} ry={w * 0.05} fill="#f6b48e" transform="rotate(-42)" />}
     </g>
   )
 }
 function Potato({ x, y }: { x: number; y: number }) {
-  return (
-    <g transform={`translate(${x} ${y})`} filter="url(#photoSh)">
-      <path d="M-80 -10 C-82 -50 -30 -62 10 -58 C60 -55 88 -30 84 6 C80 44 40 60 -6 58 C-52 56 -78 30 -80 -10 Z" fill="url(#potSkin)" />
-      {[[-40, -25], [20, -38], [50, 10], [-15, 30], [-55, 15]].map(([a, b], i) => <ellipse key={i} cx={a} cy={b} rx="4" ry="2.5" fill="#5c3a18" opacity="0.7" />)}
-      <ellipse cx="-30" cy="-30" rx="26" ry="10" fill="rgba(255,255,255,0.18)" transform="rotate(-12 -30 -30)" />
-    </g>
-  )
+  return <Sprite src={P5('potato')} x={x} y={y} w={180} h={192} rot={-8} />
 }
 function PotatoHalves({ x, y, scraped }: { x: number; y: number; scraped: boolean }) {
   return (
     <g transform={`translate(${x} ${y})`}>
-      <g transform="translate(-40 0) rotate(-10)" filter="url(#photoSh)">
-        <ellipse rx="56" ry="44" fill="#8a5a2c" />
-        <ellipse rx="51" ry="40" fill="url(#potFace)" />
-        <ellipse rx="40" ry="30" fill="none" stroke="rgba(200,180,120,0.5)" strokeWidth="1.5" />
-        {scraped && <path d="M-20 -6 C-5 -12 10 -12 24 -4 L22 4 C8 -2 -6 -2 -20 4 Z" fill="rgba(255,255,255,0.75)" />}
-      </g>
-      <g transform="translate(60 6) rotate(16)" filter="url(#photoSh)">
-        <path d="M-56 0 C-56 -30 -28 -46 4 -44 C36 -42 58 -24 56 4 C54 30 26 44 -6 42 C-34 40 -56 26 -56 0 Z" fill="url(#potSkin)" />
-      </g>
+      <Sprite src={P5('potato-halves')} x={0} y={0} w={240} h={203} />
+      {scraped && <path d="M-72 -18 C-58 -24 -40 -24 -26 -16 L-28 -8 C-42 -14 -58 -14 -72 -8 Z" fill="rgba(255,255,255,0.8)" />}
     </g>
   )
 }
@@ -89,7 +66,7 @@ function PepperScene({ flags, active, progress, angle, bubbles }: SceneProps) {
       {dropping && <g><Sprite src="shared/dropper" x={630} y={298} w={24} h={130} /><Drip x={630} y0={362} y1={392} t={progress} colour={liquid} /></g>}
       {active === 'peel' && progress > 0 && (
         <Inset x={560} y={170} caption="A thin, see-through red skin">
-          <PepperStrip x={-10} y={30} rot={0} />
+          <PepperStrip x={-10} y={30} rot={0} w={170} />
           <path d={`M-20 18 C${-20 + progress * 30} ${18 - progress * 50} ${-10 + progress * 60} ${10 - progress * 70} ${10 + progress * 70} ${-progress * 60}`} stroke="rgba(240,110,70,0.75)" strokeWidth={10} fill="none" strokeLinecap="round" />
           <g transform={`translate(${10 + progress * 70} ${-progress * 60}) rotate(-30)`}><Sprite src="shared/forceps" x={60} y={0} w={130} h={16} shadow={false} /></g>
         </Inset>
