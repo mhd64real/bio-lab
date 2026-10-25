@@ -124,9 +124,9 @@ export const SEM: Instrument<SemState, SemAction> = {
   View: SemView,
   Controls: SemControls,
   parts: [
-    { id: 'column', name: 'Electron column', job: 'Makes a very fine beam of electrons and steers it back and forth across the surface, line by line.', x: 36, y: 22 },
-    { id: 'chamber', name: 'Specimen chamber', job: 'The stub sits on a stage in here. The air is pumped out before the beam is switched on.', x: 37, y: 43, act: { type: 'door' } },
+    { id: 'column', name: 'Electron column', job: 'Makes a very fine beam of electrons and steers it back and forth across the surface, line by line.', x: 38, y: 20 },
+    { id: 'chamber', name: 'Specimen chamber', job: 'The stub sits on a stage in here. The air is pumped out before the beam is switched on.', x: 40, y: 46, act: { type: 'door' } },
     { id: 'detector', name: 'Detector', job: 'Counts the electrons knocked out of the surface at each point. More electrons, brighter pixel.', x: 28, y: 36 },
-    { id: 'monitors', name: 'Monitors', job: 'The image is built up point by point as the beam scans.', x: 68, y: 37, act: { type: 'beam' } },
+    { id: 'monitors', name: 'Monitors', job: 'The image is built up point by point as the beam scans.', x: 68, y: 42, act: { type: 'beam' } },
   ],
 }

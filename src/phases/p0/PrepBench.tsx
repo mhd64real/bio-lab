@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { CheckCircle2, Lightbulb, RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/kit'
 import { play } from '../../lib/sound'
@@ -30,6 +30,24 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   // Each slider change, with the angle it started from.
   const samples = useRef<{ from: number; t: number }[]>([])
+  // The target is the "e" of "help" (line 2, character 1). Its position depends on the font the browser
+  // actually draws, so it is measured from the rendered text rather than guessed.
+  const targetLine = useRef<SVGTextElement>(null)
+  const [eBox, setEBox] = useState({ x: 22, y: 50, w: 7, h: 9 })
+  useLayoutEffect(() => {
+    const measure = () => {
+      const t = targetLine.current
+      if (!t || t.getNumberOfChars() < 2) return
+      try {
+        const r = t.getExtentOfChar(1)
+        setEBox({ x: r.x, y: r.y, w: r.width, h: r.height })
+      } catch { /* keep the estimate */ }
+    }
+    measure()
+    // Georgia may finish loading after the first paint and change the letter widths.
+    document.fonts?.ready.then(measure).catch(() => {})
+  }, [])
+  const ex = eBox.x + eBox.w / 2, ey = eBox.y + eBox.h * 0.57
 
   const lower = (a: number) => {
     const now = performance.now()
@@ -94,7 +112,7 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
             <image href={art('p0/newsprint')} x="-6" y="-4" width="262" height="310" preserveAspectRatio="none" filter="url(#photoSh)" />
             <g style={{ mixBlendMode: 'multiply' }}>
               {Array.from({ length: 13 }, (_, i) => (
-                <text key={i} x="16" y={40 + i * 19} fontFamily="Georgia, serif" fontSize="12.5" fill="#2e2e2e" opacity="0.88">
+                <text key={i} ref={i === 1 ? targetLine : undefined} x="16" y={40 + i * 19} fontFamily="Georgia, serif" fontSize="12.5" fill="#2e2e2e" opacity="0.88">
                   {['Students at the school will', 'help the science club build', 'a new garden next week. The', 'plan includes fresh beds for', 'herbs, a small pond and a', 'shelter where bees can rest.', 'Parents are welcome to join', 'the team on Saturday morning,', 'when the first seeds will be', 'planted near the east gate.', 'Tools and gloves are provided', 'and the club asks everyone to', 'bring a bottle of water along.'][i]}
                 </text>
               ))}
@@ -102,11 +120,11 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
             </g>
             {stage === 'cut' ? (
               <g onClick={() => { play('clip'); setStage('place') }} className="cursor-pointer">
-                <circle cx="38" cy="55" r="13" fill="rgba(242,165,22,0.15)" stroke="#f2a516" strokeWidth="3" strokeDasharray="5 4" className="attention-svg" />
-                <rect x="14" y="32" width="48" height="46" fill="transparent" />
+                <circle cx={ex} cy={ey} r="9" fill="rgba(242,165,22,0.15)" stroke="#f2a516" strokeWidth="3" strokeDasharray="5 4" className="attention-svg" />
+                <rect x={ex - 24} y={ey - 23} width="48" height="46" fill="transparent" />
               </g>
             ) : (
-              <rect x="29" y="45" width="18" height="18" fill="#c9c9c4" opacity="0.9" />
+              <rect x={ex - 9} y={ey - 9} width="18" height="18" fill="#c9c9c4" opacity="0.9" />
             )}
           </g>
 

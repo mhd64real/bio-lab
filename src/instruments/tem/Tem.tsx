@@ -129,7 +129,7 @@ export const TEM: Instrument<TemState, TemAction> = {
     { id: 'gun', name: 'Electron gun', job: 'At the top: a hot filament gives off electrons, and 120 000 volts accelerate them down the column.', x: 51, y: 7 },
     { id: 'column', name: 'Column and magnetic lenses', job: 'The electrons travel down a tube with almost all the air pumped out. Magnetic coils act as lenses.', x: 51, y: 25 },
     { id: 'holder', name: 'Specimen holder and airlock', job: 'The grid sits in the tip of this rod. It enters the vacuum through an airlock.', x: 35, y: 40, act: { type: 'toAirlock' } },
-    { id: 'chamber', name: 'Viewing chamber and camera', job: 'Electrons that pass through the section form the image here, where a camera records it.', x: 51, y: 70 },
+    { id: 'chamber', name: 'Viewing chamber and camera', job: 'Electrons that pass through the section form the image here, where a camera records it.', x: 51, y: 62 },
     { id: 'leftPanel', name: 'Beam controls', job: 'High tension, beam and brightness.', x: 36, y: 64, act: { type: 'beam' } },
     { id: 'rightPanel', name: 'Magnification and focus', job: 'Knobs for magnification, focus and the stage.', x: 63, y: 64 },
     { id: 'monitor', name: 'Monitor', job: 'Shows the camera image.', x: 69, y: 50 },

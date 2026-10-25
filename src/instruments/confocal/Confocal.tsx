@@ -157,9 +157,9 @@ export const CONFOCAL: Instrument<ConfocalState, ConfocalAction> = {
   Controls: ConfocalControls,
   parts: [
     { id: 'lasers', name: 'Laser unit', job: 'Holds the lasers. Each laser makes one colour of light that excites one dye.', x: 23, y: 79, act: { type: 'power' } },
-    { id: 'scanhead', name: 'Scan head', job: 'Mirrors sweep the laser spot across the sample, point by point. The pinhole sits in here.', x: 25, y: 55 },
+    { id: 'scanhead', name: 'Scan head', job: 'Mirrors sweep the laser spot across the sample, point by point. The pinhole sits in here.', x: 32, y: 54 },
     { id: 'stage', name: 'Stage', job: 'Holds the dish. On an inverted microscope the lens is underneath, looking up through the glass bottom.', x: 47, y: 37, act: { type: 'dish' } },
-    { id: 'objectives', name: 'Objectives (below the stage)', job: 'The lenses point up at the dish from underneath.', x: 45, y: 47 },
+    { id: 'objectives', name: 'Objectives (below the stage)', job: 'The lenses point up at the dish from underneath.', x: 47, y: 45 },
     { id: 'monitor', name: 'Monitor', job: 'The image is built by the computer, one point at a time, and shown here.', x: 79, y: 42, act: { type: 'scan' } },
   ],
 }
