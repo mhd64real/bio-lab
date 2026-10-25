@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle2, Circle, FastForward } from 'lucide-react'
 import { Hot, type PrepDef, type SceneProps } from '../../lab/PrepRunner'
 import { ArtStage, Drip, PhotoSlide, Sprite, VideoInset } from '../../lab/artKit'
@@ -148,7 +148,7 @@ export const SEM_PREP: PrepDef = {
 // ---------------------------------------------------------------------------
 // TEM preparation, replayed: the same method as Phase 2, only the sample changes.
 
-export function ReplayPrep({ title, sample, steps, onDone }: { title: string; sample: string; steps: PrepStep[]; onDone: () => void }) {
+export function ReplayPrep({ title, sample, note, steps, onDone }: { title: string; sample?: string; note?: ReactNode; steps: Pick<PrepStep, 'id' | 'title'>[]; onDone: () => void }) {
   const [done, setDone] = useState(-1)
   const running = done >= 0 && done < steps.length
   useEffect(() => {
@@ -161,7 +161,7 @@ export function ReplayPrep({ title, sample, steps, onDone }: { title: string; sa
       <div className="card">
         <span className="eyebrow">Fast replay</span>
         <h2 className="mb-2 mt-1 font-display text-2xl font-bold leading-tight">{title}</h2>
-        <p className="mb-4 leading-relaxed">You already know this method from Phase 2. The only change is the sample: <b>{sample}</b>. Run it to prepare a new grid.</p>
+        <p className="mb-4 leading-relaxed">{note ?? <>You already know this method from Phase 2. The only change is the sample: <b>{sample}</b>. Run it to prepare a new grid.</>}</p>
         <ol className="mb-4 grid gap-1.5">
           {steps.map((st, i) => (
             <li key={st.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 font-bold ${i < done ? 'text-[var(--color-ok)]' : i === done ? 'bg-[var(--color-accent-soft)]' : 'text-[var(--color-faint)]'}`}>

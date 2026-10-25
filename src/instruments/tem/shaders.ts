@@ -9,7 +9,7 @@ uniform vec2 uRes;
 uniform float uFov;
 uniform vec2 uStage;
 uniform vec3 uBurn; // x, y, on
-uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining
+uniform float uSpec; // 0 centrosome cell, 1 ciliated windpipe lining, 2 nucleus
 out vec4 outColor;
 ${NOISE}
 
@@ -121,13 +121,167 @@ float ciliaSection(vec2 p) {
   return max(dens, memb);
 }
 
+
+// Cytoplasm of a sectioned cell: ribosomes, mitochondria with cristae and rough ER.
+// q: position in the cell frame, g: cell id, R: cell radius, keep: centre and radius of an area to keep clear.
+float cytoplasm(vec2 p, vec2 q, vec2 g, float R, vec3 keep) {
+  vec2 rv = voronoi(p * 28.0);
+  float rib = smoothstep(0.32, 0.14, rv.x) * smoothstep(0.38, 0.55, vnoise(p * 9.0)) * lod(0.02);
+  rib = max(rib * 0.8, 0.35 * smoothstep(0.55, 0.75, vnoise(p * 14.0)) * (1.0 - lod(0.02)));
+  float cyto = 0.2 + 0.08 * fbm(p * 3.0) + 0.25 * rib + 0.06 * (vnoise(p * 200.0) - 0.5) * lod(0.01);
+  for (int m = 0; m < 6; m++) {
+    vec2 hm = hash22(vec2(float(m), 5.0) + g * 1.9);
+    vec2 mc = (hm - 0.5) * R * 1.3;
+    if (length(mc - keep.xy) < keep.z) continue;
+    vec2 mq = rot(hm.x * 6.28) * (q - mc);
+    float e = length(mq / vec2(0.9, 0.35));
+    if (e < 1.08) {
+      float mem = ring(e, 1.0, 0.06) * 0.9;
+      float cri = (1.0 - smoothstep(0.015, 0.015 + gPx, abs(fract(mq.x * 5.0) - 0.5) / 5.0)) * step(e, 0.95) * lod(0.05);
+      cyto = max(cyto * 0.8 + 0.25 * step(e, 1.0), max(mem, cri * 0.75));
+    }
+  }
+  float er = 0.0;
+  for (int j = 0; j < 4; j++) {
+    vec2 hj = hash22(vec2(float(j), 8.0) + g);
+    vec2 eq = rot(hj.x * 3.0) * (q - (hj - 0.5) * R);
+    if (length((hj - 0.5) * R - keep.xy) < keep.z * 0.8) continue;
+    float wav = eq.y + 0.25 * sin(eq.x * 1.7 + hj.y * 9.0);
+    float pair = max(ring(abs(wav), 0.035, 0.012), 0.0) * step(abs(eq.x), 2.5);
+    er = max(er, pair * lod(0.03));
+  }
+  return max(cyto, er * 0.8);
+}
+
+// Shape of a nucleus outline at elliptical angle th (also used in model.ts to find a pore).
+float nucWob(float th, float seed) { return 1.0 + 0.03 * sin(3.0 * th + seed) + 0.02 * sin(5.0 * th + 2.0 * seed); }
+
+// The nucleus, sectioned: double envelope with pores, ribosomes on the outer membrane, heterochromatin
+// lining the envelope (interrupted at the pores) and in clumps, pale euchromatin, and a nucleolus: a dense
+// spongy network of granules with small pale fibrillar centres. Returns density, or -1 outside the nucleus.
+const float PORE_SLOT = 0.85;
+const float HOME_PORE = 7.0;
+// A soft membrane profile (stained lipid bilayer), fading once thinner than a pixel.
+float softLine(float d, float w) { float s = max(w, gPx * 0.7); return exp(-d * d / (s * s)) * min(1.0, w / gPx + 0.1); }
+float nucleusSection(vec2 nq, vec2 ax, float seed, vec3 nucleolus, bool home) {
+  float th = atan(nq.y / ax.y, nq.x / ax.x);
+  float w = nucWob(th, seed);
+  vec2 rim = ax * w * vec2(cos(th), sin(th));
+  float rl = length(rim);
+  float dEnv = (length(nq) / rl - 1.0) * rl; // um, negative inside
+  if (dEnv > 0.1) return -1.0;
+  dEnv += 0.012 * sin(th * rl * 9.0 + seed) * lod(0.03); // gentle undulation of the envelope
+
+  // Pores: one in most 0.85 um stretches of the outline (arc length measured with the mean radius).
+  float Rm = 0.5 * (ax.x + ax.y);
+  float sArc = (th + 3.14159265) * Rm;
+  float k = floor(sArc / PORE_SLOT);
+  bool target = home && k == HOME_PORE;
+  bool has = target || hash12(vec2(k, seed)) < 0.65;
+  float pc = (k + 0.5) * PORE_SLOT + (target ? 0.0 : (hash12(vec2(k, seed + 1.0)) - 0.5) * 0.45);
+  float dp = has ? abs(sArc - pc) : 1.0;
+  float inPore = 1.0 - smoothstep(0.044, 0.05, dp);
+
+  // Two thin membranes with the perinuclear space between them; they join round the edge of each pore.
+  float sep = 0.024 + 0.028 * smoothstep(0.2, 0.9, vnoise(vec2(sArc * 3.0, seed)));
+  float memb = max(softLine(dEnv, 0.0055), softLine(dEnv - sep, 0.0055));
+  memb = max(memb, softLine(dp - 0.048, 0.0055) * smoothstep(-0.006, 0.0, dEnv) * smoothstep(sep + 0.006, sep, dEnv));
+  memb *= (1.0 - inPore) * (0.48 + 0.2 * vnoise(vec2(sArc * 90.0, seed)) + 0.12 * vnoise(vec2(sArc, dEnv) * 300.0));
+  // The pore complex: fuzzy material filling the opening, densest in the middle, with fibrils either side.
+  float fuzz = 0.5 + 0.5 * vnoise(vec2(sArc, dEnv) * 160.0);
+  float mid = dEnv - sep * 0.5;
+  float plug = (1.0 - smoothstep(0.035, 0.065, dp)) * (0.5 * exp(-(dp * dp + mid * mid) / 0.0009) + 0.3 * fuzz * exp(-mid * mid / 0.0015));
+
+  if (dEnv > sep + 0.006) {
+    // Cytoplasm side: ribosomes stuck to the outer membrane.
+    float rs = sArc / 0.032;
+    float off = 0.058 + 0.01 * (hash12(vec2(floor(rs), seed + 2.0)) - 0.5);
+    float d = length(vec2((fract(rs) - 0.5) * 0.032, dEnv - off));
+    float ribo = smoothstep(0.013, 0.007, d) * step(0.5, hash12(vec2(floor(rs), seed))) * (1.0 - inPore) * lod(0.02);
+    float v = max(memb, max(plug, ribo * 0.75));
+    return v > 0.05 ? max(v, 0.26) : -1.0;
+  }
+  if (dEnv > 0.0) return max(0.22 + 0.1 * (fuzz - 0.5) + 0.06 * (vnoise(nq * 200.0) - 0.5), max(memb, plug));
+
+  // Inside. Fine granular texture of chromatin fibres, only resolved at high magnification.
+  float grain = 0.6 * vnoise(nq * 70.0 + seed) + 0.4 * vnoise(nq * 140.0);
+  float eu = 0.21 + 0.07 * fbm(nq * 5.0 + seed) + 0.22 * (grain - 0.5) * lod(0.015);
+  // Heterochromatin: a dark layer of uneven thickness under the envelope, with pale channels to the pores.
+  float band = 0.1 + 0.2 * fbm(vec2(sArc * 2.2, seed));
+  float rough = 0.05 * (fbm(nq * 22.0 + seed) - 0.5);
+  float het = smoothstep(-band - 0.04, -band + 0.03, dEnv + rough);
+  het *= 1.0 - (1.0 - smoothstep(0.04, 0.12, dp + 0.15 * smoothstep(-0.05, -0.35, dEnv)));
+  // Irregular clumps through the interior.
+  het = max(het, smoothstep(0.6, 0.7, fbm(nq * 1.3 + seed * 3.0) + 0.1 * (fbm(nq * 14.0 + seed) - 0.5)));
+  float hd = 0.52 + 0.1 * fbm(nq * 18.0) + 0.3 * (grain - 0.5) * lod(0.015);
+  float dens = mix(eu, hd, het);
+
+  if (nucleolus.z > 0.0) {
+    vec2 oq = nq - nucleolus.xy;
+    float orad = nucleolus.z * (0.92 + 0.22 * fbm(normalize(oq + 1e-4) * 2.0 + seed));
+    float rr = length(oq);
+    // Heterochromatin clinging round the nucleolus.
+    dens = mix(dens, hd, smoothstep(orad + 0.25, orad + 0.05, rr) * smoothstep(0.45, 0.6, fbm(oq * 4.0 + seed)));
+    float inN = 1.0 - smoothstep(orad - gPx, orad + gPx + 0.02, rr);
+    if (inN > 0.0) {
+      // Nucleolonema: a spongy network of dense strands with paler spaces between.
+      float net = smoothstep(0.38, 0.56, fbm(oq * 6.0 + seed * 2.0));
+      vec2 gv = voronoi(oq / 0.026 + seed);
+      float granules = smoothstep(0.45, 0.15, gv.x);
+      float nuc = mix(0.55, 0.68, net) + 0.22 * (granules - 0.5) * lod(0.022) + 0.12 * (fbm(oq * 25.0) - 0.5);
+      // Fibrillar centres: small pale islands rimmed by the dense fibrillar component.
+      for (int f = 0; f < 6; f++) {
+        vec2 hf = hash22(vec2(float(f), seed + 4.0));
+        vec2 fc = (hf - 0.5) * orad * 1.25;
+        float fr = 0.05 + 0.06 * hf.y;
+        float d = length(oq - fc) * (1.0 + 0.25 * vnoise((oq - fc) * 60.0));
+        nuc = mix(nuc, 0.8, smoothstep(fr + 0.06, fr + 0.01, d) * smoothstep(fr - 0.03, fr + 0.01, d) * lod(0.03));
+        nuc = mix(nuc, 0.4 + 0.1 * grain, smoothstep(fr + 0.01, fr - 0.02, d) * lod(0.03));
+      }
+      dens = mix(dens, nuc, inN);
+    }
+  }
+  return max(dens, max(memb, plug));
+}
+
+float nucleusTissue(vec2 p) {
+  float dens = 0.06 + 0.03 * fbm(p * 0.8);
+  vec2 g = floor(p / 26.0 + 0.5);
+  bool home = g.x == 0.0 && g.y == 0.0;
+  vec2 h = hash22(g + 3.0);
+  if (!home && h.x <= 0.3) return dens;
+  vec2 h2 = hash22(g * 1.7 + 9.0);
+  vec2 c = g * 26.0 + (home ? vec2(0.0) : (h - 0.5) * 6.0);
+  vec2 q = rot(home ? 0.0 : h.y * 6.28) * (p - c);
+  float rr = length(q);
+  float th = atan(q.y, q.x);
+  float R = (home ? 9.5 : 7.0 + 3.0 * h.x) * (1.0 + 0.12 * sin(3.0 * th + h.x * 9.0) + 0.06 * sin(7.0 * th));
+  float inside = disc(rr, R);
+  if (inside <= 0.0) return dens;
+  // Each cell was cut at a different height through its nucleus: big, small, or missed altogether.
+  float cutH = home ? 0.0 : (h2.x - 0.5) * 2.4;
+  float sc = sqrt(max(0.0, 1.0 - cutH * cutH / 1.44));
+  vec2 nOff = home ? vec2(0.0) : (h2 - 0.5) * 3.0;
+  vec2 ax = (home ? vec2(4.6, 3.6) : vec2(3.6 + 1.2 * h.y, 2.8 + 0.8 * h2.y)) * sc;
+  // The nucleolus only appears if the slice passes through it.
+  vec3 nl = home ? vec3(1.2, 0.8, 1.0) : vec3((h2.yx - 0.5) * ax * 0.8, step(0.4, sc) * step(abs(cutH - 0.3 * (h.x - 0.5)), 0.5) * (0.6 + 0.4 * h2.x) * sc);
+  float cellD = cytoplasm(p, q, g, R, vec3(nOff, max(ax.x, 1.0) + 1.0));
+  if (sc > 0.15) {
+    float n = nucleusSection(q - nOff, ax, home ? 1.0 : h.x * 17.0, nl, home);
+    if (n >= 0.0) cellD = n;
+  }
+  cellD = max(cellD, ring(rr, R, 0.012) * 0.9);
+  return mix(dens, cellD, inside);
+}
+
 void main() {
   vec2 v = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
   gPx = uFov / min(uRes.x, uRes.y);
   vec2 p = uStage + v * uFov;
 
   float dens;
-  if (uSpec > 0.5) dens = ciliaSection(p);
+  if (uSpec > 1.5) dens = nucleusTissue(p);
+  else if (uSpec > 0.5) dens = ciliaSection(p);
   else {
   // Resin section: nearly transparent, with faint texture.
   dens = 0.06 + 0.03 * fbm(p * 0.8);

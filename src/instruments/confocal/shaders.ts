@@ -12,6 +12,7 @@ uniform float uZ;
 uniform float uTh;      // optical section half-thickness, um
 uniform float uPsf;     // lateral resolution (blur sigma), um
 uniform vec3 uCh;       // 405, 488, 640 channels on
+uniform float uSpec;    // 0 cytoskeleton cells, 1 nuclei (Hoechst + GFP nuclear pores)
 out vec4 outColor;
 ${NOISE}
 
@@ -21,6 +22,86 @@ mat2 rot(float a) { return mat2(cos(a), sin(a), -sin(a), cos(a)); }
 float layer(float z0) { float d = (uZ - z0) / uTh; return exp(-d * d); }
 float slab(float z0, float z1) { float d = max(0.0, max(z0 - uZ, uZ - z1)) / uTh; return exp(-d * d); }
 
+
+// A dense layer of living cells, seen through their nuclei. Each nucleus is an ellipsoid sitting on the glass:
+// the optical section cuts it at height uZ, so its outline shrinks towards the top and bottom.
+// Hoechst (blue): chromatin, brighter near the envelope, with dark nucleoli where there is little DNA, and
+// faint dots of mitochondrial DNA in the cytoplasm. GFP (green): nuclear pores, a ring of dots at the
+// equator that becomes a sheet of dots where the section skims the top or bottom of the envelope.
+vec3 nucleiField(vec2 p, float t, float sig, float px) {
+  const float SP = 24.0;
+  vec3 col = vec3(0.0);
+  vec2 g0 = floor(p / SP + 0.5);
+  for (int yy = -1; yy <= 1; yy++) for (int xx = -1; xx <= 1; xx++) {
+    vec2 g = g0 + vec2(xx, yy);
+    bool home = g.x == 0.0 && g.y == 0.0;
+    vec2 h = hash22(g + 5.0), h2 = hash22(g * 2.7 + 1.0);
+    vec2 c = g * SP + (home ? vec2(0.0) : (h - 0.5) * 9.0);
+    float ang = home ? 0.3 : h.y * 6.2831;
+    vec3 ax = home ? vec3(9.0, 7.0, 3.2) : vec3(6.5 + 2.5 * h.x, 5.0 + 1.8 * h2.y, 2.6 + 0.8 * h2.x);
+    float zc = home ? 4.5 : 0.5 + ax.z + 0.6 * h2.y;
+    vec2 q = rot(-ang) * (p - c);
+    // Slightly irregular outline.
+    float th = atan(q.y, q.x);
+    float wob = 1.0 + 0.04 * sin(3.0 * th + h.x * 9.0) + 0.025 * sin(5.0 * th + h2.x * 7.0);
+    vec2 qn = q / (ax.xy * wob);
+    float r2 = dot(qn, qn);
+    if (r2 > 1.6) {
+      // Cytoplasm: faint specks of mitochondrial DNA.
+      vec2 mv = voronoi(p * 1.4 + g * 3.0);
+      col.b += 0.05 * smoothstep(0.18, 0.05, mv.x) * step(r2, 4.5) * step(0.55, hash12(floor(p * 1.4 + g * 3.0))) * slab(0.5, 2.5);
+      continue;
+    }
+    float dz = (uZ - zc) / ax.z;
+    float e = r2 + dz * dz;            // < 1 inside the nucleus at this focus
+    float edgeW = sig / min(ax.x, ax.y) * 2.0 + 0.02;
+    float inside = 1.0 - smoothstep(1.0 - edgeW, 1.0 + edgeW, e);
+    // Axial blur: the section is uTh thick, so a nucleus just above or below still glows faintly.
+    float near = exp(-pow(max(0.0, abs(uZ - zc) - ax.z * sqrt(max(0.0, 1.0 - r2))) / uTh, 2.0));
+    float fill = max(inside, 0.45 * near * step(r2, 1.0));
+
+    // Chromatin: texture that changes as the focus moves through the nucleus.
+    vec2 tq = q * 0.9 + g * 13.0 + vec2(uZ * 0.83, -uZ * 0.61) + t * 0.01;
+    float chrom = 0.55 + 0.5 * fbm(tq) + 0.25 * smoothstep(0.55, 0.85, vnoise(tq * 2.3));
+    chrom += 0.45 * smoothstep(0.72, 0.98, e) * inside;
+    // Nucleoli: spheres inside the nucleus, dark in Hoechst.
+    float dark = 0.0;
+    for (int k = 0; k < 3; k++) {
+      vec2 hk = hash22(vec2(float(k), 9.0) + g * 1.3);
+      vec3 nc = home
+        ? (k == 0 ? vec3(2.4, 1.2, 5.0) : k == 1 ? vec3(-3.4, -1.6, 3.6) : vec3(0.0, -3.5, 6.2))
+        : vec3((hk - 0.5) * ax.xy * 0.9, zc + (hk.x - 0.5) * ax.z);
+      float nr = home ? (k == 0 ? 1.7 : k == 1 ? 1.25 : 0.8) : 0.7 + 0.8 * hk.y;
+      float zz = (uZ - nc.z) / uTh;
+      float cut = sqrt(max(0.0, nr * nr - pow(max(0.0, abs(uZ - nc.z) - uTh * 0.5), 2.0)));
+      dark = max(dark, (1.0 - smoothstep(cut - sig, cut + sig, length(q - nc.xy))) * step(0.01, cut) * (0.85 - 0.1 * clamp(abs(zz), 0.0, 1.0)));
+    }
+    float dna = fill * chrom * (1.0 - dark);
+    col += uCh.x * vec3(0.30, 0.48, 1.0) * dna * (home ? 1.0 : 0.85 + 0.3 * h.x);
+
+    // Envelope with pores (GFP). Where the section crosses the steep side wall, the pores form a thin ring
+    // of dots along the outline; where it skims the flat top or bottom, they are seen face-on as a sheet.
+    float rf2 = 1.0 - dz * dz;
+    float Rm = 0.5 * (ax.x + ax.y);
+    float lat = asin(clamp(dz, -1.0, 1.0));
+    float rimD = abs(sqrt(r2) - sqrt(max(rf2, 0.0))) * Rm;
+    float rimW = exp(-pow(rimD / (sig * 1.2 + 0.1), 2.0)) * step(0.0, rf2);
+    vec2 rv = voronoi(vec2(th * Rm * cos(lat), lat * ax.z) / 0.62 + g * 7.0);
+    float rimDots = smoothstep(0.5, 0.15, rv.x);
+    float sheetW = 0.0;
+    float sheetDots = 0.0;
+    if (r2 < 1.0) {
+      float hz = ax.z * sqrt(1.0 - r2);
+      sheetW = max(exp(-pow((uZ - (zc + hz)) / uTh, 2.0)), exp(-pow((uZ - (zc - hz)) / uTh, 2.0))) * smoothstep(0.98, 0.7, r2);
+      sheetDots = smoothstep(0.42, 0.12, voronoi(q / 0.62 + g * 5.0 + 40.0).x);
+    }
+    float fine = smoothstep(px * 2.0, px * 4.0, 0.62);
+    float pores = max(rimW * mix(0.6, 0.2 + 1.3 * rimDots, fine), sheetW * mix(0.45, 0.15 + 1.1 * sheetDots, fine));
+    col += uCh.y * vec3(0.18, 1.0, 0.32) * pores * (home ? 1.1 : 0.95);
+  }
+  return col;
+}
+
 void main() {
   // Frames arrive a few times a second, like a real scanning system.
   float t = floor(uTime * 4.0) / 4.0 * uSpeed;
@@ -28,6 +109,7 @@ void main() {
   vec2 p = v * uFov;
   float px = uFov / min(uRes.x, uRes.y);
   float sig = max(uPsf, px * 0.7);
+  if (uSpec > 0.5) { outColor = vec4(nucleiField(p, t, sig, px), 1.0); return; }
 
   const float SP = 80.0;
   vec2 g = floor(p / SP + 0.5);

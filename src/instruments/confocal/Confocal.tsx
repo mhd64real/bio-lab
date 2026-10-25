@@ -31,6 +31,7 @@ function ConfocalView({ state: s }: { state: ConfocalState }) {
         uHaze: Math.max(0, (s.pinhole - 1) / 4) * (s.objective === 63 ? 1 : 0.3),
         uSoft: (dry ? 9 : 1) + (s.pinhole - 0.5) * 0.6,
         uRange: s.range,
+        uSpec: s.specimen === 'nuclei' ? 1 : 0,
       }}
     />
   )
@@ -45,11 +46,11 @@ function ConfocalControls({ state: s, act, can, hl }: CtlProps<ConfocalState, Co
           <Power size={20} /> {s.power ? 'System on' : 'System off'}
         </button>
         <div className="mt-2 grid gap-1.5">
-          {LASERS.map((l) => (
+          {LASERS.filter((l) => LASER_INFO[s.specimen][l]).map((l) => (
             <button key={l} type="button" disabled={!can('laser') || !s.power} onClick={() => act({ type: 'laser', laser: l })}
               className={`ctl-btn w-full ${s.lasers[l] ? 'ctl-on' : ''}`} aria-pressed={s.lasers[l]}>
-              <span className="h-3.5 w-3.5 flex-none rounded-full" style={{ background: LASER_INFO[l].colour, opacity: s.lasers[l] ? 1 : 0.35 }} />
-              <span className="text-left leading-tight"><b>{LASER_INFO[l].name}</b> <span className="text-sm font-bold text-[var(--color-muted)]">{LASER_INFO[l].target}</span></span>
+              <span className="h-3.5 w-3.5 flex-none rounded-full" style={{ background: LASER_INFO[s.specimen][l]!.colour, opacity: s.lasers[l] ? 1 : 0.35 }} />
+              <span className="text-left leading-tight"><b>{LASER_INFO[s.specimen][l]!.name}</b> <span className="text-sm font-bold text-[var(--color-muted)]">{LASER_INFO[s.specimen][l]!.target}</span></span>
             </button>
           ))}
         </div>

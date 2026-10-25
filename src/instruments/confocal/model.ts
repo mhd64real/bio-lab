@@ -1,14 +1,25 @@
-// Laser scanning confocal microscope (inverted). Live cells stained with three dyes:
-// Hoechst (405 nm, nucleus, blue), Tubulin Tracker Green (488 nm, microtubules), SiR-actin (640 nm, microfilaments).
+// Laser scanning confocal microscope (inverted). Two kinds of living sample:
+// 'cyto': Hoechst (405 nm, nucleus), Tubulin Tracker Green (488 nm, microtubules), SiR-actin (640 nm, microfilaments).
+// 'nuclei': Hoechst (405 nm, DNA) in cells that make a green fluorescent (GFP) nuclear pore protein (488 nm).
 // Units: focus z and stage in micrometres above the coverglass.
 
 export type Laser = 405 | 488 | 640
 export const LASERS: Laser[] = [405, 488, 640]
-export const LASER_INFO: Record<Laser, { name: string; target: string; colour: string }> = {
-  405: { name: '405 nm', target: 'Hoechst: nucleus (DNA)', colour: '#6d5cf6' },
-  488: { name: '488 nm', target: 'Tubulin dye: microtubules', colour: '#22b455' },
-  640: { name: '640 nm', target: 'SiR-actin: microfilaments', colour: '#e0479e' },
+export type ConfocalSpecimen = 'cyto' | 'nuclei'
+type LaserInfo = { name: string; target: string; colour: string }
+export const LASER_INFO: Record<ConfocalSpecimen, Partial<Record<Laser, LaserInfo>>> = {
+  cyto: {
+    405: { name: '405 nm', target: 'Hoechst: nucleus (DNA)', colour: '#6d5cf6' },
+    488: { name: '488 nm', target: 'Tubulin dye: microtubules', colour: '#22b455' },
+    640: { name: '640 nm', target: 'SiR-actin: microfilaments', colour: '#e0479e' },
+  },
+  nuclei: {
+    405: { name: '405 nm', target: 'Hoechst: DNA', colour: '#6d5cf6' },
+    488: { name: '488 nm', target: 'GFP: nuclear pore protein', colour: '#22b455' },
+  },
 }
+// Geometry of the nucleus in the middle of the 'nuclei' dish: an ellipsoid, micrometres.
+export const NUC = { zc: 4.5, c: 3.2 }
 
 export type CObjective = 10 | 63
 
@@ -27,6 +38,7 @@ export interface ConfocalState {
   timelapse: boolean
   range: boolean
   dose: number // accumulated light dose on this field of view (bleaches the dyes)
+  specimen: ConfocalSpecimen
 }
 
 export type ConfocalAction =
@@ -64,6 +76,7 @@ export function initialConfocal(): ConfocalState {
     timelapse: false,
     range: false,
     dose: 0,
+    specimen: 'cyto',
   }
 }
 
@@ -113,6 +126,10 @@ export function inFocusAmount(s: ConfocalState) {
   const th = section(s)
   const w = (z0: number) => Math.exp(-(((s.z - z0) / th) ** 2))
   const layers: number[] = []
+  if (s.specimen === 'nuclei') {
+    const slab = Math.exp(-((Math.max(0, NUC.zc - NUC.c - s.z, s.z - NUC.zc - NUC.c) / th) ** 2))
+    return s.lasers[405] || s.lasers[488] ? slab : 0
+  }
   if (s.lasers[640]) layers.push(w(0.3))
   if (s.lasers[488]) layers.push(w(0.9))
   if (s.lasers[405]) layers.push(Math.max(w(2), w(3.5), w(5)))

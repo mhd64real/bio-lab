@@ -109,7 +109,7 @@ async function instStation(kind) {
     const title = await page.locator('.station-guide h2').first().innerText()
     if (title !== globalThis.__i) { log('  step:', title); globalThis.__i = title }
     const now = page.locator('li', { hasText: 'Now:' })
-    const fovOf = (x) => kind === 'sem' ? 120000 / [100, 500, 2000, 5000, 15000][x.mag] : 60000 / [500, 2000, 5000, 15000, 40000, 100000][x.mag]
+    const fovOf = (x) => kind === 'sem' ? 120000 / [100, 500, 2000, 5000, 15000][x.mag] : 60000 / [500, 2000, 5000, 15000, 44000, 100000][x.mag]
     const move = async (tx, ty, tol) => { for (let k = 0; k < 60; k++) { const x = await S(); const f = fovOf(x); const dx = tx - x.x, dy = ty - x.y; if (Math.hypot(dx, dy) <= tol) return; const ms = (d) => Math.min(900, Math.max(40, Math.abs(d) / f * 2500)); if (Math.abs(dx) > tol / 2) await holdBtn(dx > 0 ? 'Move right' : 'Move left', ms(dx)); if (Math.abs(dy) > tol / 2) await holdBtn(dy > 0 ? 'Move up' : 'Move down', ms(dy)) } }
     const magTo = async (m) => { for (let k = 0; k < 6; k++) { const x = await S(); if (x.mag === m) return; await click(x.mag < m ? 'Higher magnification' : 'Lower magnification') } }
     const focusSem = async () => { for (let k = 0; k < 60; k++) { const x = await S(); if (Math.abs(x.focus) * 0.004 < fovOf(x) * 0.006) return; await holdBtn(x.focus > 0 ? 'Focus down' : 'Focus up', Math.min(900, Math.max(30, Math.abs(x.focus) / 6))) } }

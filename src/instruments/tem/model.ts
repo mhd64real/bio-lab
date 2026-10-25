@@ -2,7 +2,7 @@
 // on a copper grid; it has to go through an airlock into the vacuum of the column.
 // Units: stage in micrometres, defocus in nanometres.
 
-export const MAGS = [500, 2000, 5000, 15000, 40000, 100000] as const
+export const MAGS = [500, 2000, 5000, 15000, 44000, 100000] as const
 export type Holder = 'out' | 'loaded' | 'airlock' | 'in'
 
 export interface TemState {
@@ -19,7 +19,7 @@ export interface TemState {
   damage: number // accumulated electron dose on the current area
   burnAt: { x: number; y: number } | null
   interlock: number // last time the airlock interlock refused, for the message
-  specimen: 'centrosome' | 'cilia'
+  specimen: 'centrosome' | 'cilia' | 'nucleus'
 }
 
 export type TemAction =
@@ -106,3 +106,12 @@ export const scaleBar = (s: TemState) => {
   const len = nice.find((n) => n > f * 0.18) ?? 50000
   return { frac: len / f, label: len >= 1000 ? `${len / 1000} um` : `${len} nm` }
 }
+
+// A nuclear pore on the nucleus in the middle of the 'nucleus' section (slot HOME_PORE of PORE_SLOT um,
+// placed exactly; see nucleusSection and nucWob in shaders.ts).
+export const NUCLEUS = (() => {
+  const ax = [4.6, 3.6], Rm = (ax[0] + ax[1]) / 2
+  const th = (7.5 * 0.85) / Rm - Math.PI
+  const w = 1 + 0.03 * Math.sin(3 * th + 1) + 0.02 * Math.sin(5 * th + 2)
+  return { pore: { x: ax[0] * w * Math.cos(th), y: ax[1] * w * Math.sin(th) }, nucleolus: { x: 1.2, y: 0.8 } }
+})()
