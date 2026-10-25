@@ -96,8 +96,9 @@ export function CoverInset({ x, y, angle, liquid }: { x: number; y: number; angl
   )
 }
 
-export function Caption({ x, y, children }: { x: number; y: number; children: ReactNode }) {
-  return <text x={x} y={y} textAnchor="middle" fontSize="13" fontWeight="800" fill="#5a6779">{children}</text>
+// A short caption over the bench, on a rounded white label so it stays readable over the photos.
+export function Caption({ x, y, children }: { x: number; y: number; children: string }) {
+  return <PillLabel x={x} y={y} size={13}>{children}</PillLabel>
 }
 
 export const mix = (a: [number, number, number], b: [number, number, number], t: number, alpha = 1) =>

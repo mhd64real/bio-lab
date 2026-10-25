@@ -157,8 +157,8 @@ function TemPrepScene({ flags, active, progress }: SceneProps) {
       <Hot id="dry"><BlotSprite x={470} y={420} /></Hot>
 
       {active === 'cut' && <VideoInset name="ultramicrotome" p={progress} from={0.3} to={9.6} caption="Slices 70 nm thick, a thousand times thinner than paper" x={560} y={190} />}
-      {active === 'fix' && <Caption x={330} y={150}>Kills the cells instantly and locks every protein in place</Caption>}
-      {active === 'osmium' && <Caption x={330} y={150}>A heavy metal: it sticks to membranes and stains them black</Caption>}
+      {active === 'fix' && <Caption x={330} y={180}>Kills the cells instantly and locks every protein in place</Caption>}
+      {active === 'osmium' && <Caption x={330} y={180}>A heavy metal: it sticks to membranes and stains them black</Caption>}
     </ArtStage>
   )
 }

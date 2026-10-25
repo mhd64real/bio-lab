@@ -36,7 +36,8 @@ export function CheekArtScene({ flags, active, progress, angle, bubbles }: Scene
 
       <Hot id="bin" ring={{ cx: 130, cy: 375, r: 72 }}>
         <Sprite src={CH('disinfectant')} x={130} y={375} w={84} h={133} />
-        {binned && <g transform="translate(130 330) rotate(14)"><image href={art(CH('swab'))} x="-6" y="-70" width="12" height="120" /></g>}
+        {/* Used swab, cotton end first into the disinfectant, the clean wooden end sticking out. */}
+        {binned && <g transform="translate(130 352) rotate(194)"><image href={art(CH('swab'))} x="-6" y="-70" width="12" height="120" /></g>}
       </Hot>
 
       <BlotSprite x={392} y={96} stain={has('blot') ? liquid : undefined} />
@@ -51,7 +52,9 @@ export function CheekArtScene({ flags, active, progress, angle, bubbles }: Scene
           {has('blot') && <rect x="46" y="-34" width="34" height="68" rx="3" fill="#fbfbf7" stroke="#d9dde3" />}
         </PhotoSlide>
       </Hot>
-      {active === 'smear' && <SwabWithCells x={636 + (smear - 0.5) * 60} y={330} rot={-20} cells={1 - smear * 0.7} />}
+      {/* Rolling the cotton tip across the slide: the tip (top of the sprite, 90 units from its centre) touches
+          the smear, the wooden stick points up and away. */}
+      {active === 'smear' && <SwabWithCells x={636 + (smear - 0.5) * 60 - 31} y={398 - 85} rot={160} cells={1 - smear * 0.7} />}
       {staining && (
         <g>
           <Sprite src={CH('meth-blue')} x={634} y={300} w={44} h={134} rot={180} />
