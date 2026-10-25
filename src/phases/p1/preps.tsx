@@ -1,5 +1,6 @@
 import { Hot, type PrepDef, type SceneProps } from '../../lab/PrepRunner'
 import { BlotPaper, Bottle, Caption, CoverInset, Dropper, mix, Slide, Stage } from './sceneKit'
+import { OnionArtScene } from './onionArt'
 
 const WATER: [number, number, number] = [150, 205, 240]
 const IODINE: [number, number, number] = [205, 145, 35]
@@ -87,7 +88,7 @@ function PeelInset({ p }: { p: number }) {
   )
 }
 
-function OnionScene({ flags, active, progress, angle, bubbles }: SceneProps) {
+export function OnionScene({ flags, active, progress, angle, bubbles }: SceneProps) {
   const has = (f: string) => flags.has(f)
   const stained = has('iodine') ? 1 : active === 'iodine' && has('iodine:started') ? progress : 0
   const liquid = mix(WATER, IODINE, stained, 0.4 + 0.15 * stained)
@@ -129,7 +130,8 @@ function OnionScene({ flags, active, progress, angle, bubbles }: SceneProps) {
 
 export const ONION_PREP: PrepDef = {
   name: 'Onion epidermis wet mount',
-  Scene: OnionScene,
+  // Experiment branch: generated photo sprites. The code-drawn OnionScene stays for comparison.
+  Scene: OnionArtScene,
   steps: [
     { id: 'cut', kind: 'tap', action: 'Tap the onion to cut it in half', title: 'Cut the onion', body: 'Cut the onion bulb in half with the knife. Inside you can see rings: each ring is a fleshy layer called a scale leaf.' },
     { id: 'piece', kind: 'tap', action: 'Tap one of the rings to cut a piece out', title: 'Cut out a small piece', body: 'Cut a small square from one of the fleshy scale leaves, about the size of your fingernail.' },
