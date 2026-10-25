@@ -43,24 +43,25 @@ export interface PrepDef {
 }
 
 // Scenes mark their clickable objects with <Hot id="stepId">; only the current step's object responds.
-interface HotCtx { active: string | null; act(): void; holdStart(): void; holdEnd(): void; kind: PrepStep['kind'] | null }
-const Ctx = createContext<HotCtx>({ active: null, act() {}, holdStart() {}, holdEnd() {}, kind: null })
+// busy: the current action is playing out (a tap or a timed wait), so its object stops inviting taps.
+interface HotCtx { active: string | null; act(): void; holdStart(): void; holdEnd(): void; kind: PrepStep['kind'] | null; busy: boolean }
+const Ctx = createContext<HotCtx>({ active: null, act() {}, holdStart() {}, holdEnd() {}, kind: null, busy: false })
 
 export function Hot({ id, children, ring }: { id: string | string[]; children: ReactNode; ring?: { cx: number; cy: number; r: number } }) {
   const c = useContext(Ctx)
   const on = c.active !== null && (Array.isArray(id) ? id.includes(c.active) : id === c.active)
   const hold = on && c.kind === 'hold'
-  const tappable = on && (c.kind === 'tap' || c.kind === 'timer' || c.kind === 'repeat')
+  const tappable = on && !c.busy && (c.kind === 'tap' || c.kind === 'timer' || c.kind === 'repeat')
   return (
     <g
-      className={on ? 'hot-on' : undefined}
+      className={on && !c.busy ? 'hot-on' : undefined}
       style={{ cursor: tappable || hold ? 'pointer' : undefined }}
       onClick={tappable ? c.act : undefined}
       onPointerDown={hold ? (e) => { (e.currentTarget as Element).setPointerCapture(e.pointerId); c.holdStart() } : undefined}
       onPointerUp={hold ? c.holdEnd : undefined}
       onPointerCancel={hold ? c.holdEnd : undefined}
     >
-      {on && ring && <circle cx={ring.cx} cy={ring.cy} r={ring.r} className="hot-ring" />}
+      {on && !c.busy && ring && <circle cx={ring.cx} cy={ring.cy} r={ring.r} className="hot-ring" />}
       {children}
     </g>
   )
@@ -72,6 +73,7 @@ function makeBubbles(speed: number): Bubble[] {
 }
 
 const FAST_CLOCK = 2.6 // real seconds a timed wait takes on screen, however long it is in the lab
+const TAP_SECONDS = 0.9 // how long a single tap action plays out before the step completes
 
 export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Mount) => void }) {
   const [index, setIndex] = useState(0)
@@ -105,7 +107,19 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
 
   const act = () => {
     if (finished || flags.has(step.id) || running) return
-    if (step.kind === 'tap') { play('drop'); setProgress(1); complete() }
+    if (step.kind === 'tap') {
+      // A short action plays out before the step completes, so scenes can show it (a drop falling, a knife moving).
+      play('drop')
+      setRunning(true)
+      const t0 = performance.now()
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - t0) / 1000 / TAP_SECONDS)
+        setProgress(p)
+        if (p < 1) raf.current = requestAnimationFrame(tick)
+        else complete()
+      }
+      raf.current = requestAnimationFrame(tick)
+    }
     else if (step.kind === 'timer') {
       play('drop')
       setRunning(true)
@@ -205,7 +219,7 @@ export function PrepRunner({ def, onDone }: { def: PrepDef; onDone: (mount: Moun
       </aside>
 
       <section className="prep-bench card" aria-label="Lab bench">
-        <Ctx.Provider value={{ active: finished || doneNow ? null : step.id, act, holdStart, holdEnd, kind: finished ? null : step.kind }}>
+        <Ctx.Provider value={{ active: finished || doneNow ? null : step.id, act, holdStart, holdEnd, kind: finished ? null : step.kind, busy: running }}>
           <div className="min-h-0">
             <def.Scene flags={flags} active={finished ? null : step.id} progress={finished ? 1 : progress} angle={angle} bubbles={bubbles} />
           </div>

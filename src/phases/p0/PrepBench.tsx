@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CheckCircle2, Lightbulb, RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/kit'
 import { play } from '../../lib/sound'
@@ -72,6 +72,24 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
 
   const step = STEPS[stage]
   const paperOnSlide = stage !== 'cut' && stage !== 'place'
+  // The drop: squeeze the bulb, the drop falls from the tip onto the paper, then the water spreads.
+  const [dropT, setDropT] = useState<number | null>(null)
+  const dropRaf = useRef(0)
+  useEffect(() => () => cancelAnimationFrame(dropRaf.current), [])
+  const squeeze = () => {
+    if (stage !== 'drop' || dropT !== null) return
+    play('drop')
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / 900)
+      setDropT(t)
+      if (t < 1) dropRaf.current = requestAnimationFrame(tick)
+      else { setDropT(null); setStage('cover') }
+    }
+    dropRaf.current = requestAnimationFrame(tick)
+  }
+  const fall = dropT === null ? 0 : Math.min(1, Math.max(0, (dropT - 0.25) / 0.55)) // 0 at the tip, 1 on the paper
+  const spread = dropT === null ? 0 : Math.max(0, (dropT - 0.8) / 0.2)
   const water = stage === 'cover' || stage === 'result'
 
   return (
@@ -141,6 +159,7 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
                 <rect x="190" y="45" width="30" height="30" fill="#dcdcd6" stroke="#b9b9b2" />
                 <text x="205" y="67" textAnchor="middle" fontFamily="Georgia, serif" fontSize="22" fill="#1c1c1c">e</text>
                 {water && stage !== 'result' && <ellipse cx="205" cy="58" rx="26" ry="18" fill="rgba(140,205,245,0.45)" stroke="rgba(80,150,200,0.6)" />}
+                {spread > 0 && <ellipse cx="205" cy="58" rx={26 * spread} ry={18 * spread} fill="rgba(140,205,245,0.45)" stroke="rgba(80,150,200,0.6)" />}
               </g>
             )}
             {stage === 'result' && bubbles.map((b, i) => (
@@ -159,11 +178,13 @@ export function PrepBench({ onDone }: { onDone: (mount: Mount) => void }) {
           {/* Dropper */}
           <g
             transform={`translate(${stage === 'drop' ? 535 : 705} ${stage === 'drop' ? 175 : 150})`}
-            onClick={() => { if (stage === 'drop') { play('drop'); setStage('cover') } }}
+            onClick={squeeze}
             className={stage === 'drop' ? 'cursor-pointer' : ''}
           >
-            {stage === 'drop' && <circle cx="0" cy="0" r="72" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" />}
+            {stage === 'drop' && dropT === null && <circle cx="0" cy="0" r="72" fill="rgba(242,165,22,0.1)" stroke="#f2a516" strokeWidth="3" strokeDasharray="8 6" />}
             <Sprite src="shared/dropper" x={0} y={0} w={24} h={132} rot={stage === 'drop' ? 0 : 8} />
+            {/* The drop hangs at the tip, then falls onto the paper on the slide. */}
+            {dropT !== null && fall < 1 && <ellipse cx="0" cy={68 + fall * 66} rx={3 + 2 * Math.min(1, dropT * 4)} ry={4 + 3 * Math.min(1, dropT * 4)} fill="rgba(140,205,245,0.9)" stroke="rgba(70,140,190,0.7)" />}
           </g>
 
           <Sprite src="p0/coverslips" x={620} y={78} w={80} h={85} />
