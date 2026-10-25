@@ -17,7 +17,7 @@ export const PHASES = [
 export function Home() {
   const { phases } = useProgress()
   return (
-    <div className="min-h-full">
+    <div className="min-h-full" data-no-finder>
       <header className="topbar">
         <Microscope className="text-[var(--color-primary)]" />
         <div className="flex-1">

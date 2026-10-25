@@ -455,3 +455,17 @@ button:disabled { cursor: default; }
 .ctl-focus { container-type: inline-size; }
 .ctl-focus .ctl-btn { min-width: 0; padding: 0 0.6rem; }
 @container (max-width: 330px) { .ctl-focus .kbd { display: none; } }
+
+/* "Next action" button: appears when the student's next action is off screen (see ActionFinder). */
+.action-finder {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60;
+  display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.6rem 1.1rem;
+  border-radius: 999px; background: var(--color-accent); color: #1f1400; font-weight: 800;
+  box-shadow: 0 6px 18px rgba(30, 40, 60, 0.28); animation: finder-in 0.25s ease-out, finder-bob 1.6s ease-in-out 0.25s infinite;
+}
+.action-finder-up { bottom: auto; top: 76px; }
+@keyframes finder-in { from { opacity: 0; transform: translate(-50%, 10px); } }
+@keyframes finder-bob { 50% { transform: translate(-50%, -3px); } }
+.cta-flash { animation: cta-flash 0.8s ease-out 2 !important; }
+@keyframes cta-flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 90%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+@media (prefers-reduced-motion: reduce) { .action-finder { animation: none; } .cta-flash { animation: none !important; outline: 3px solid var(--color-accent); } }
