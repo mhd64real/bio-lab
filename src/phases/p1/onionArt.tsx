@@ -41,6 +41,14 @@ function ArtStage({ children }: { children: ReactNode }) {
         <linearGradient id="glass" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#f3fbff" stopOpacity="0.85" /><stop offset="1" stopColor="#d6ecf7" stopOpacity="0.85" /></linearGradient>
         <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="2" dy="5" stdDeviation="5" floodOpacity="0.18" /></filter>
         <filter id="photoSh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="4" dy="7" stdDeviation="6" floodColor="#1d2733" floodOpacity="0.28" /></filter>
+        <pattern id="cells" width="14" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)">
+          <rect width="14" height="6" fill="rgba(240,248,255,0.25)" />
+          <path d="M0 0.25 H14 M0.25 0 V3 M7 3 V6 M0 3 H14" stroke="rgba(110,140,165,0.55)" strokeWidth="0.6" fill="none" />
+        </pattern>
+        <pattern id="cellsStained" width="7" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)">
+          <rect width="7" height="3" fill="rgba(215,160,60,0.22)" />
+          <path d="M0 0.2 H7 M0.2 0 V1.5 M3.5 1.5 V3 M0 1.5 H7" stroke="rgba(160,105,30,0.4)" strokeWidth="0.35" fill="none" />
+        </pattern>
         <clipPath id="insetClip"><circle cx="0" cy="0" r="118" /></clipPath>
         {/* The square cut out of one onion ring, applied live to the onion-half photo. */}
         <mask id="notch" maskUnits="userSpaceOnUse" x="0" y="0" width="820" height="480">
@@ -55,23 +63,33 @@ function ArtStage({ children }: { children: ReactNode }) {
 }
 
 function PeelInset({ p }: { p: number }) {
-  // Close-up of the onion piece; the see-through skin lifts off from left to right.
-  const L = 170, x0 = -85
+  // Close-up: a small onion piece snapped back, and the epidermis lifting off as a clear film,
+  // only one cell thick, so the background and the piece show straight through it.
+  const L = 150, x0 = -70, y = 50
+  // The skin is drawn as a sheet seen slightly from above: every edge has a depth offset (dx, dy).
+  const dx = 16, dy = -12
   const peeled = p * L
-  const bx = x0 + peeled
-  const tipX = x0 + peeled * 0.35, tipY = 10 - peeled * 0.5
-  const ribbon = `M${bx} 8 Q${bx - peeled * 0.25} 0 ${tipX} ${tipY} L${tipX + 10} ${tipY + 12} Q${bx - peeled * 0.18} 12 ${bx} 16 Z`
+  const bx = x0 + peeled // the line where the skin is still attached
+  const tipX = bx - peeled * 0.45, tipY = y - peeled * 0.75
+  const cx = bx - peeled * 0.15, cy = y - peeled * 0.15
+  const film = `M${bx} ${y} Q${cx} ${cy} ${tipX} ${tipY} L${tipX + dx} ${tipY + dy} Q${cx + dx} ${cy + dy} ${bx + dx} ${y + dy} Z`
+  const sheen = `M${bx + 3} ${y - 3} Q${cx + 4} ${cy - 3} ${tipX + 5} ${tipY - 3}`
+  const lying = `M${bx} ${y} L78 ${y} L${78 + dx} ${y + dy} L${bx + dx} ${y + dy} Z`
   return (
     <g transform="translate(560 170)">
       <circle r="120" fill="#fff" stroke="#d6dee8" strokeWidth="3" filter="url(#sh)" />
       <g clipPath="url(#insetClip)">
-        <rect x="-130" y="-130" width="260" height="260" fill="#eef1f4" />
-        <image href={src('onion-piece')} x="-92" y="2" width="184" height="188" />
-        <rect x={bx} y="8" width={85 - bx} height="8" fill="rgba(235,245,255,0.75)" stroke="#9bb8cf" strokeWidth="1" />
+        <rect x="-130" y="-130" width="260" height="260" fill="#e9edf1" />
+        <image href={src('onion-piece')} x="-78" y={34} width="156" height="80" preserveAspectRatio="xMidYMin slice" />
+        {/* skin still attached to the inner surface */}
+        {bx < 78 && <path d={lying} fill="url(#cells)" stroke="rgba(120,150,175,0.6)" strokeWidth="0.8" />}
         {p > 0.02 && (
           <g>
-            <path d={ribbon} fill="rgba(230,242,252,0.82)" stroke="#8fb0c9" strokeWidth="1.5" />
-            <g transform={`translate(${tipX + 6} ${tipY + 6}) rotate(-125)`}>
+            <path d={film} fill="rgba(225,238,250,0.35)" />
+            <path d={film} fill="url(#cells)" />
+            <path d={film} fill="none" stroke="rgba(120,150,175,0.85)" strokeWidth="1.2" />
+            <path d={sheen} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2.5" strokeLinecap="round" />
+            <g transform={`translate(${tipX + dx / 2} ${tipY + dy / 2}) rotate(-120)`}>
               <image href={src('forceps')} x="-6" y="-9" width="150" height="18" />
             </g>
           </g>
@@ -87,7 +105,8 @@ export function OnionArtScene({ flags, active, progress, angle, bubbles }: Scene
   const has = (f: string) => flags.has(f)
   const stained = has('iodine') ? 1 : active === 'iodine' && has('iodine:started') ? progress : 0
   const liquid = mix(WATER, IODINE, stained, 0.4 + 0.15 * stained)
-  const dropping = active === 'water' || active === 'iodine'
+  // A tool moves over the slide only once the student has tapped it; until then it waits, glowing, in its place.
+  const dropping = (active === 'water' && progress > 0) || (active === 'iodine' && has('iodine:started'))
   const drip = active === 'water' ? progress : active === 'iodine' && has('iodine:started') ? Math.min(1, progress * 3) : 0
   return (
     <ArtStage>
@@ -107,13 +126,18 @@ export function OnionArtScene({ flags, active, progress, angle, bubbles }: Scene
         {has('blot') && <ellipse cx="-26" cy="0" rx="13" ry="19" fill={liquid} />}
       </g>
       <Hot id="peel"><Sprite name="forceps" x={420} y={330} w={160} h={19} rot={-14} /></Hot>
-      <Hot id="iodine" ring={{ cx: 744, cy: 100, r: 60 }}><Sprite name="iodine" x={744} y={100} w={40} h={110} /></Hot>
-      <Hot id="water" ring={{ cx: 780, cy: 240, r: 62 }}>{!dropping && <Sprite name="dropper" x={780} y={240} w={22} h={122} rot={8} />}</Hot>
+      <Hot id="iodine" ring={{ cx: 744, cy: 100, r: 60 }}>{!(active === 'iodine' && dropping) && <Sprite name="iodine" x={744} y={100} w={40} h={110} />}</Hot>
+      <Hot id="water" ring={{ cx: 730, cy: 250, r: 66 }}>{!(active === 'water' && dropping) && <Sprite name="dropper" x={730} y={250} w={22} h={122} rot={8} />}</Hot>
 
       <Hot id={['lay', 'blot']} ring={{ cx: 630, cy: 400, r: 70 }}>
         <PhotoSlide x={600} y={400} bubbles={bubbles} cover={has('cover')}>
           {has('water') && <ellipse rx={has('cover') ? 46 : 26} ry={has('cover') ? 40 : 19} fill={liquid} />}
-          {has('lay') && <path d="M-16 -14 q16 -5 32 2 q4 14 -2 28 q-16 5 -30 -2 q-4 -14 0 -28 z" fill={mix([250, 245, 228], IODINE, stained, 0.85)} stroke="#c9b37a" strokeWidth="1.2" />}
+          {has('lay') && (
+            <g>
+              <path d="M-12 -10 q12 -4 24 1 q3 10 -1 20 q-12 4 -22 -1 q-3 -10 -1 -20 z" fill={stained > 0.5 ? 'url(#cellsStained)' : 'url(#cells)'} />
+              <path d="M-12 -10 q12 -4 24 1 q3 10 -1 20 q-12 4 -22 -1 q-3 -10 -1 -20 z" fill="none" stroke={stained > 0.5 ? 'rgba(170,115,35,0.55)' : 'rgba(150,175,195,0.7)'} strokeWidth="0.8" />
+            </g>
+          )}
           {has('blot') && <rect x="46" y="-34" width="34" height="68" rx="3" fill="#fbfbf7" stroke="#d9dde3" />}
         </PhotoSlide>
       </Hot>
