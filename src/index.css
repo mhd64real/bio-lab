@@ -380,10 +380,23 @@ button:disabled { cursor: default; }
 .prep-tool:disabled { opacity: 0.5; }
 
 /* ---------- Cell diagrams ---------- */
-.cell-svg { width: 100%; height: auto; max-height: 70vh; }
+.cell-figure { position: relative; width: 100%; max-width: 980px; margin: 0 auto; }
 .cell-part { cursor: pointer; }
-.cell-part:hover { filter: brightness(1.08); }
-.cell-part-on { filter: drop-shadow(0 0 4px #f2a516) drop-shadow(0 0 2px #f2a516); }
+.cell-part > * { fill: transparent; stroke: transparent; stroke-width: 4; pointer-events: all; transition: fill 0.15s, stroke 0.15s; }
+.cell-part > .cell-band { fill: none; pointer-events: stroke; }
+@media (hover: hover) { .cell-part:hover > * { fill: rgba(255, 255, 255, 0.22); stroke: rgba(23, 33, 46, 0.35); } .cell-part:hover > .cell-band { fill: none; stroke: rgba(23, 33, 46, 0.18); } }
+.cell-part.cell-part-on > * { fill: rgba(242, 165, 22, 0.14); stroke: #f2a516; stroke-width: 6; }
+.cell-part.cell-part-on > .cell-band { fill: none; stroke: rgba(242, 165, 22, 0.6); }
+.cell-part-hint > * { animation: cell-hint 1.1s ease-in-out infinite; }
+.cell-part-hint > .cell-band { fill: none; }
+@keyframes cell-hint { 0%, 100% { fill: rgba(34, 180, 85, 0.04); stroke: rgba(34, 180, 85, 0.35); } 50% { fill: rgba(34, 180, 85, 0.16); stroke: #22b455; } }
+.cell-part-hint > .cell-band { animation-name: cell-hint-band; }
+@keyframes cell-hint-band { 0%, 100% { stroke: rgba(34, 180, 85, 0.25); } 50% { stroke: rgba(34, 180, 85, 0.75); } }
+.cell-leader { stroke: #5a6779; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.cell-pin { fill: #fff; stroke: #5a6779; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.cell-leader-on { stroke: #f2a516; stroke-width: 2.5; }
+.cell-label { position: absolute; max-width: 21%; padding: 3px 10px; border-radius: 12px; background: #fff; border: 1.5px solid var(--color-line); box-shadow: 0 1px 4px rgba(23, 33, 46, 0.12); font-size: 13px; font-weight: 800; line-height: 1.2; color: #17212e; pointer-events: none; white-space: normal; }
+.cell-label-on { border-color: #f2a516; background: #fff6e0; color: #7a4f00; z-index: 1; }
 .tick {
   display: inline-grid;
   place-items: center;

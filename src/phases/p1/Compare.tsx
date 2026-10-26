@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { CheckCircle2, Tags, XCircle } from 'lucide-react'
+import { CheckCircle2, Lightbulb, Tags, XCircle } from 'lucide-react'
 import { Button } from '../../ui/kit'
 import { play } from '../../lib/sound'
-import { AnimalCell, PlantCell, ProkaryoteCell, STRUCTURES, type CellKind } from './CellDiagrams'
+import { CellFigure, STRUCTURES, type CellKind } from './CellDiagrams'
 
 const FIND: Record<CellKind, { id: string; prompt: string }[]> = {
   animal: [
@@ -23,7 +23,7 @@ const FIND: Record<CellKind, { id: string; prompt: string }[]> = {
     { id: 'ribosomes', prompt: 'Tap the ribosomes: tiny structures that make proteins.' },
     { id: 'wall', prompt: 'Tap the cell wall. In bacteria it is made of peptidoglycan, not cellulose.' },
     { id: 'capsule', prompt: 'Tap the capsule: a sticky outer coat.' },
-    { id: 'flagella', prompt: 'Tap the flagella: whip-like tails used for moving.' },
+    { id: 'flagella', prompt: 'Tap the flagellum: a whip-like tail used for moving.' },
   ],
 }
 
@@ -50,18 +50,20 @@ function Explore({ onDone }: { onDone: () => void }) {
   const [picked, setPicked] = useState<string | null>(null)
   const [wrong, setWrong] = useState<string | null>(null)
   const [labels, setLabels] = useState(false)
+  // Wrong taps on the current task; after two, the student can ask to be shown.
+  const [misses, setMisses] = useState(0)
+  const [hint, setHint] = useState(false)
   const kind = ORDER[cell]
   const tasks = FIND[kind]
   const doneCell = task >= tasks.length
   const pick = (id: string) => {
     setPicked(id)
     if (doneCell) return
-    if (id === tasks[task].id) { play('ok'); setWrong(null); setTask(task + 1) }
-    else { play('click'); setWrong(id) }
+    if (id === tasks[task].id) { play('ok'); setWrong(null); setTask(task + 1); setMisses(0); setHint(false); if (task + 1 >= tasks.length) { setLabels(true); setPicked(null) } }
+    else { play('click'); setWrong(id); setMisses(misses + 1) }
   }
-  const Diagram = kind === 'animal' ? AnimalCell : kind === 'plant' ? PlantCell : ProkaryoteCell
   return (
-    <div className="mx-auto grid max-w-6xl gap-4 p-4 lg:grid-cols-[340px_1fr]">
+    <div className="mx-auto grid max-w-6xl gap-4 p-4 xl:grid-cols-[340px_1fr]">
       <div className="card self-start">
         <span className="eyebrow">Figure 17, Visualizing cells</span>
         <h2 className="mb-2 mt-1 font-display text-2xl font-bold leading-tight">{TITLE[kind]} ({cell + 1} of 3)</h2>
@@ -70,20 +72,22 @@ function Explore({ onDone }: { onDone: () => void }) {
             <p className="mb-2 text-sm font-bold text-[var(--color-muted)]">Task {task + 1} of {tasks.length}</p>
             <p className="rounded-xl border-2 border-[var(--color-accent)] bg-[var(--color-accent-soft)] p-3 text-lg font-bold leading-snug">{tasks[task].prompt}</p>
             {wrong && <p className="mt-3 flex gap-2 rounded-xl bg-[var(--color-danger-soft)] p-3 leading-snug"><XCircle size={18} className="mt-0.5 flex-none text-[var(--color-danger)]" /> That is the {STRUCTURES[kind][wrong].toLowerCase()}. Try again.</p>}
+            {misses >= 2 && !hint && <Button variant="ghost" className="mt-3" onClick={() => setHint(true)}><Lightbulb size={18} /> Show me where</Button>}
+            {hint && <p className="mt-3 flex gap-2 rounded-xl bg-[var(--color-ok-soft)] p-3 leading-snug"><Lightbulb size={18} className="mt-0.5 flex-none text-[var(--color-ok)]" /> It is glowing green. Tap it.</p>}
           </>
         ) : (
           <>
-            <p className="mb-3 flex gap-2 leading-relaxed"><CheckCircle2 className="mt-0.5 flex-none text-[var(--color-ok)]" /> All found. Tap any part to see its name, or turn on the labels.</p>
+            <p className="mb-3 flex gap-2 leading-relaxed"><CheckCircle2 className="mt-0.5 flex-none text-[var(--color-ok)]" /> All found. Every part is labelled now. Tap a part to highlight it, or hide the labels to test yourself.</p>
             {picked && <p className="mb-3 font-bold">{STRUCTURES[kind][picked]}</p>}
-            <Button onClick={() => { if (cell + 1 < ORDER.length) { setCell(cell + 1); setTask(0); setPicked(null); setWrong(null) } else onDone() }}>
+            <Button onClick={() => { if (cell + 1 < ORDER.length) { setCell(cell + 1); setTask(0); setPicked(null); setWrong(null); setMisses(0); setHint(false); setLabels(false) } else onDone() }}>
               {cell + 1 < ORDER.length ? `Next: ${TITLE[ORDER[cell + 1]].toLowerCase()}` : 'Next: sort the structures'}
             </Button>
           </>
         )}
       </div>
       <div className="card relative">
-        {doneCell && <button type="button" className="icon-btn absolute right-3 top-3" aria-pressed={labels} onClick={() => setLabels(!labels)}><Tags size={18} /> Labels</button>}
-        <Diagram picked={picked} onPick={pick} showAll={labels && doneCell} />
+        {doneCell && <button type="button" className="icon-btn absolute right-3 top-3 z-10" aria-pressed={labels} onClick={() => setLabels(!labels)}><Tags size={18} /> Labels</button>}
+        <CellFigure key={kind} kind={kind} picked={picked} hint={hint && !doneCell ? tasks[task].id : null} onPick={pick} showAll={labels && doneCell} />
       </div>
     </div>
   )
